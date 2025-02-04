@@ -6,14 +6,13 @@
     ------------------------------------------------------------------------
 """
 
+from typing import Optional
+
 import numpy.typing as npt
-import numpy as np
+
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
-from typing import Optional
-
-from Mousify.encodings.encoder import Encoder
 
 
 class Sampler(layers.Layer):
@@ -24,7 +23,9 @@ class Sampler(layers.Layer):
     """
 
     # Note: Keras call() != __call__() because it also builds weight and bias tensors
-    def call(self, mean: npt.ArrayLike, variance: npt.ArrayLike):
+    def call(
+        self, mean: npt.ArrayLike, variance: npt.ArrayLike
+    ):  # pylint: disable=arguments-differ
         """
         ## Calls a Sampler instance as a function
         Samples the latent vector as a tensorflow layer.
@@ -43,7 +44,8 @@ class ProtVAE(keras.Model):
     ## Implementation of the protein VAE
     Uses three layers of 1D convolutions with ELU activation functions in the encoder.
     In the decoder step, we use 8 consecutive "UpBlock"s.
-    Each "UpBlock" consists of a batch norm-ELU-Conv1D block, followed by a batch norm-ELU-ConvTranspose1D block.
+    Each "UpBlock" consists of a batch norm-ELU-Conv1D block,
+    followed by a batch norm-ELU-ConvTranspose1D block.
     The consecutive blocks increase the shape of the output.
     Lastly, the last UpBlock output is reduced to the final output size using Conv1D.
     ### Args: \n
@@ -114,7 +116,7 @@ class ProtVAE(keras.Model):
         # Initialize current_control_score
         self.current_control_score = 1
 
-    def call(self, inputs):
+    def call(self, inputs):  # pylint: disable=arguments-differ
         """
         ## Call method required for subclassing a keras Model
         """
@@ -133,7 +135,8 @@ class ProtVAE(keras.Model):
         """
         ## Defines the encoder layer of the VAE
         Encoder is made up of four consecutive Conv1D layers, followed by a flattening layer.
-        Then we create two separate dense layers from that to get the mean and the log_variance vectors.
+        Then we create two separate dense layers from that to get the mean and the
+        log_variance vectors.
         ### Args: \n
             \tinput_shape {tuple} -- shape of the input data \n
             \tlatent_dimension_size {int} -- Length of the latent dimension vector \n
@@ -216,16 +219,18 @@ class ProtVAE(keras.Model):
     ) -> keras.Model:
         """
         ## Defines the decoder layer of the VAE
-        It consists of 3 upblock layers, followed by a Conv1D & linear layer that brings the sequences
-        to a 130 x 21 shape, followed by softmax to get residue probabilites and then an argmax
-        to return a sequence. Each upblock consists of 2 ConvTranspose1D blocks to upsample.
-        This upsample (L(out) x d(up)) is concatenated with a L(out) x d(in) to produce a matrix
-        of shape L(out) x d(out), where d(out) = d(up) + d(in). At the end of the final upblock,
-        the shape of the output will be ~2*L(antibody) x d(CNN), where 2*L(antibody) is approximately
-        double the maximum length of an antibody and d(CNN) depends on the parameter size of the deconvolution.
+        It consists of 3 upblock layers, followed by a Conv1D & linear layer that brings the
+        sequences to a 130 x 21 shape, followed by softmax to get residue probabilites
+        and then an argmax to return a sequence. Each upblock consists of 2 ConvTranspose1D
+        blocks to upsample.
+        This upsample (L(out) x d(up)) is concatenated with a L(out) x d(in) to produce a
+        matrix of shape L(out) x d(out), where d(out) = d(up) + d(in).
+        At the end of the final upblock, the shape of the output will be ~2*L(antibody) x d(CNN),
+        where 2*L(antibody) is approximately double the maximum length of an antibody
+        and d(CNN) depends on the parameter size of the deconvolution.
         ### Note:
-        The final L x 21 shape, is L for the protein sequence length and 21 for 20 amino acids and one
-        position to define "no amino acid".
+        The final L x 21 shape, is L for the protein sequence length and 21 for 20 amino acids and
+        one position to define "no amino acid".
         """
         latent_inputs = keras.Input(
             shape=(
@@ -311,7 +316,8 @@ class ProtVAE(keras.Model):
     def kullback_leibler_loss(self, mean: npt.ArrayLike, log_variance: npt.ArrayLike):
         """
         ## Returns KL Loss
-        Uses the Shao et al. 2020 ControlVAE PID algorithm to calculate the KL divergence loss to prevent KL vanishing.
+        Uses the Shao et al. 2020 ControlVAE PID algorithm to calculate the KL-divergence
+        loss to prevent KL vanishing.
         See Bowman et al. 2015, Liu et al 2019.
         ### Args:
             - \tmean {ArrayLike} -- Mean vector of latent space
@@ -325,7 +331,8 @@ class ProtVAE(keras.Model):
         By calling the function train_step, it overrides the function in keras.Models.
         Since we are using a custom loss tracker, we need to define a metrics method as well.
         Therefore when model.fit() is called, only the optimizer needs to be passed, all else
-        is overridden. Control score is adapted from the Shao et al. 2020 ControlVAE PID algorithm to change the KL divergence loss to prevent KL vanishing.
+        is overridden. Control score is adapted from the Shao et al. 2020
+        ControlVAE PID algorithm to change the KL divergence loss to prevent KL vanishing.
         See Bowman et al. 2015, Liu et al 2019.
         """
 
@@ -394,7 +401,7 @@ class ProtVAE(keras.Model):
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         # Update losses
-        self.total_loss_tracker.update_state(total_loss)
+        self.total_loss_tracker.update_state(total_loss)  # disable: non-callable
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         self.kl_beta_tracker.update_state(control_score * kl_loss)

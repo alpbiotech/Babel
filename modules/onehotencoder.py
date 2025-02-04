@@ -8,29 +8,31 @@
     matrix or a 20N vector.
 """
 
-from typing import Optional, Union
+import re
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
 
-from Mousify.encodings.encoder import Encoder
+
 from abnumber import Chain
 from abnumber.exceptions import ChainParseError
 from functools import partial
 from multiprocessing import Pool
 from tqdm import tqdm
 
-import re
+from modules.encoder import Encoder
 
 
 class OneHot(Encoder):
     """
     ## One Hot Encoding
     Simple encoding that converts each amino acid into a size 20 array.
-    Array will be 1 at positions that correspond to the amino acid and 
+    Array will be 1 at positions that correspond to the amino acid and
     0 at all other positions. Encoding can either be stored as a 20xN
     matrix or a 20N vector.
     """
+
     ALL_AMINO_ACIDS = {
         "A": 0,
         "R": 1,
@@ -56,10 +58,13 @@ class OneHot(Encoder):
     }
 
     def __init__(self, sequence: Optional[npt.ArrayLike] = None):
+        super().__init__()
         if sequence is not None:
             self.sequence = sequence
 
-    def encode(self, pad_size: int, flatten: bool = False, normalize_encoding: bool = False) -> npt.ArrayLike:  # type: ignore
+    def encode(
+        self, pad_size: int, flatten: bool = False, normalize_encoding: bool = False
+    ) -> npt.ArrayLike:
         """
         ## Encodes the sequence or array of sequences as a one-hot encoding.
         ### Args:
@@ -88,7 +93,6 @@ class OneHot(Encoder):
                     array_index=i,
                     encoding_array=encoded,
                     chain=sequence_numbered,
-                    pad_size=pad_size,
                 )
             else:
                 encoded = self.populate_array(
@@ -125,12 +129,13 @@ class OneHot(Encoder):
         This is equivaltent to "regular" one-hot encoding where the padding symbol appears
         at the end of the sequence.
         ### Args:
-            \t-array_index {int} -- At what index to populate the encoding if multiple sequences are passsed \n
-            \t-encoding_array {array} -- Array populated with zeros to be filled in \n
-            \t-sequence {str} -- String representation of the antibody sequence \n
-            \t-pad_size {int} -- Up to what position to pad the encoding \n
+            array_index {int} -- At what index to populate the encoding if multiple
+            sequences are passsed \n
+            encoding_array {array} -- Array populated with zeros to be filled in \n
+            sequence {str} -- String representation of the antibody sequence \n
+            pad_size {int} -- Up to what position to pad the encoding \n
         ### Returns:
-            \t-array -- One-hot encoded array with padding at the end
+            array -- One-hot encoded array with padding at the end
         """
         # Pad at the end if sequence is less than pad_size in length
         if len(sequence) < pad_size:
@@ -150,7 +155,6 @@ class OneHot(Encoder):
         array_index: int,
         encoding_array: npt.ArrayLike,
         chain: Chain,
-        pad_size: int,
     ) -> npt.ArrayLike:
         """
         ## Populates the array in a normalized fashion according to IMGT numbering
@@ -159,12 +163,13 @@ class OneHot(Encoder):
         no residue is found in the numbering (E.g. pos 10 in FWR1 or the central positions of CDRs).
         In this encoding the last vector never uses the padding symbol.
         ### Args:
-            \t-array_index {int} -- At what index to populate the encoding if multiple sequences are passsed \n
-            \t-encoding_array {array} -- Array populated with zeros to be filled in \n
-            \t-chain {Chain} -- A Chain representation of the sequence as provided by AbNumbering \n
-            \t-pad_size {int} -- Up to what position to pad the encoding \n
+            array_index {int} -- At what index to populate the encoding if multiple
+            sequences are passsed \n
+            encoding_array {array} -- Array populated with zeros to be filled in \n
+            chain {Chain} -- A Chain representation of the sequence as provided by AbNumbering \n
+            pad_size {int} -- Up to what position to pad the encoding \n
         ### Returns:
-            \t-array -- IMGT normalized one-hot encoded array with padding in the CDRs
+            array -- IMGT normalized one-hot encoded array with padding in the CDRs
         """
         # Positions can desynchronize in CDR3 when there are insertions
         additional_position = 0
@@ -179,28 +184,28 @@ class OneHot(Encoder):
                 # Convert the imgt position from a position object to a string
                 imgt_position_string = str(imgt_position)[1:]
 
-                # FWR4 starts at position 118 in imgt, so we want to adjust its number in the position tracker
+                # FWR4 starts at position 118 in imgt, so we want to adjust its number
                 if imgt_position_string == "118" and cdr3_lenght < 15:
                     additional_position += 15 - cdr3_lenght
 
-                # Convert imgt position to int. This fails for some CDR3 positions, hence the try/except block
+                # Convert imgt position to int. This fails for some CDR3 positions
                 encoding_position = int(imgt_position_string) + additional_position
                 position_tracker.append((encoding_position, residue))
 
             # If the conversion to int fails
-            except ValueError as e:
+            except ValueError as error:
                 # See the string matches the imgt position numbering standard for CDR3 (e.g. 112A)
                 if bool(re.match("[A-Z]", str(imgt_position)[-1])):
-                    # Remove the letter at the end of the string and add 1 to the additional position
+                    # Remove the letter at the end of the string and add 1 to the position
                     encoding_position = (
                         int(str(imgt_position)[1:-1]) + additional_position
                     )
                     additional_position += 1
                     position_tracker.append((encoding_position, residue))
 
-                # If the ValueError was raised for a different reason than expected, re-raise the issue
+                # If the ValueError was raised for a different reason than expected
                 else:
-                    raise e
+                    raise error
 
         # Create a set of the positions in the position tracker
         position_set = set([item[0] for item in position_tracker])
@@ -261,7 +266,6 @@ class OneHot(Encoder):
                     array_index=i,
                     encoding_array=encoded,
                     chain=sequence_numbered,
-                    pad_size=pad_size,
                 )
             else:
                 encoded = self.populate_array(
@@ -353,24 +357,17 @@ class OneHot(Encoder):
 
         return encoded
 
-    def set_sequence(self, sequence: Union[list[str], str, npt.ArrayLike]) -> None:
-        """
-        ## Sets the sequence attribute.
-        Sequence can be a single sequence in a list or a list/array of sequences.
-        ### Args:
-                \tsequence {list[str]} -- Amino acid sequence
-        """
-        return super().set_sequence(sequence)
-
     def pad(self, sequences: npt.ArrayLike, length: int) -> list:  # type: ignore
         """
         ## Pads the sequences provided to the length indicated.
         ### Args:
-                \t sequences {list} -- List of sequences
-                \t length {int} -- Length to be padded to. Must be greater or equal to the longest sequence in sequences.
-                \t alignment {str} -- Defines whether padding is started on the left or the right of the sequence
+            sequences {list} -- List of sequences
+            length {int} -- Length to be padded to. Must be greater or equal to the
+            longest sequence in sequences.
+            alignment {str} -- Defines whether padding is started on the left or
+            the right of the sequence
         ### Returns:
-                \t {list} -- List of padded sequences
+            {list} -- List of padded sequences
         """
         # Initiate list
         padded_sequences = []
@@ -381,7 +378,8 @@ class OneHot(Encoder):
             # Make sure that provided padding length makes sense
             assert (
                 difference >= 0
-            ), f"Padding length ({length}) provided is smaller than one of the sequences ({len(sequence)})!"
+            ), f"Padding length ({length}) provided is smaller than \
+            one of the sequences ({len(sequence)})!"
 
             if difference > 0:
                 sequence = np.append(sequence, np.zeros((difference, 21)), axis=0)
@@ -416,9 +414,3 @@ class OneHot(Encoder):
             output.append(sequence.flatten())
 
         return np.array(output).astype(int)
-
-
-if __name__ == "__main__":
-    print(
-        'Hi! You just ran "OneHotEncoder.py" as your main program. This does nothing.'
-    )

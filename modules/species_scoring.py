@@ -21,14 +21,16 @@ class Discriminator(ABC):
     """
     ## Discriminator Base Class
     Used to calculate the humanization score of the antibody sequence. \n
-    This class is able to train a discriminator model, save and load the trained model to be used later. \n
-    In addition, an encoding scheme can be passed if appropriate to encode the sequences before calculating the score.
+    This class is able to train a discriminator model, save and load the trained model to
+    be used later. In addition, an encoding scheme can be passed if appropriate to encode
+    the sequences before calculating the score.
     """
 
     def __init__(self):
         self.dataset = None
         self.model = None
         self.model_path: Optional[Path] = None
+        self.sequence: Union[None, str] = None
 
     @abstractmethod
     def calculate_score(self) -> npt.DTypeLike:
@@ -37,7 +39,6 @@ class Discriminator(ABC):
         ### Returns:
                 \t{npt.DTypeLike} -- Score between [0,1] that signifies the %human score.
         """
-        pass
 
     @abstractmethod
     def train_discriminator(self, dataset: npt.ArrayLike) -> Union[npt.DTypeLike, None]:
@@ -48,13 +49,13 @@ class Discriminator(ABC):
                 \tdataset {npt.ArrayLike} -- Path to file that contains dataset
 
         ### Returns:
-                \t{npt.DTypeLike} -- Optional: Array that contains model weights, parameters and scores.
+                \t{npt.DTypeLike} -- Optional: Array that contains model weights,
+                parameters and scores.
         """
-        pass
 
     @abstractmethod
     def save_model(
-        self, format: Literal["pickle", "json", "tf", "h5"], path: Path
+        self, file_format: Literal["pickle", "json", "tf", "h5"], path: Path
     ) -> None:
         """
         ## Method that saves the model as a pickle or json file.
@@ -68,10 +69,9 @@ class Discriminator(ABC):
                                   \t -'h5'\n
                 \tpath {str} -- Path where the file is saved
         """
-        pass
 
     @abstractmethod
-    def load_model(self, format: Literal["pickle", "json"], path: Path) -> None:
+    def load_model(self, file_format: Literal["pickle", "json"], path: Path) -> None:
         """
         ## Method that loads the pickle or json file from a pre-trained model.
         Load model sets the weights contained in the pickle or json file as the
@@ -86,7 +86,6 @@ class Discriminator(ABC):
                 \tpath {str} -- Path where the file is saved
 
         """
-        pass
 
     @abstractmethod
     def encode(
@@ -99,19 +98,19 @@ class Discriminator(ABC):
         ## Encodes the sequence or list of sequences provided.
         If none is provided, it encodes self.sequence
         ### Args:
-                    \tmode {str} -- Defines whether to set the encoded attribute based on a single sequence or set of sequences,
-                                    or to return a numpy array with the encoded sequence.\n
-                            \tOptions: \n
-                            \t'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence \n
-                            \t'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided dataset
-                    \tdataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
+            \tmode {str} -- Defines whether to set the encoded attribute based on a single sequence or
+            set of sequences, or to return a numpy array with the encoded sequence.\n
+                \tOptions: \n
+                \t'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence \n
+                \t'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided dataset
+            \tdataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
         """
-        pass
 
     def load_query(self, sequence: str) -> None:
         """
         ## Sets the sequence attribute for the class.
-        Sequence can either be an amino acid sequence or a DNA sequence, which will be translated by the program.
+        Sequence can either be an amino acid sequence or a DNA sequence,
+        which will be translated by the program.
         ### Args:
                 \tsequence {str} -- Amino acid or DNA sequence
         ### Updates:
@@ -122,7 +121,12 @@ class Discriminator(ABC):
         #     sequence = translate(sequence)
         self.sequence = sequence
 
-    def load_dataset(self, path: Path, mode: Literal["folder", "file"] = "file", columns: Optional[dict] = None) -> None:
+    def load_dataset(
+        self,
+        path: Path,
+        mode: Literal["folder", "file"] = "file",
+        columns: Optional[dict] = None,
+    ) -> None:
         """
         ## Loads the dataset as an array.
         Loads the file at the file path as an array and sets the dataset attribute.
@@ -142,10 +146,13 @@ class Discriminator(ABC):
             raise ValueError(f"Reading mode {mode} not recognized.")
 
     @staticmethod
-    def _load_directory(path: Path, columns: Optional[dict] = None) -> Union[pd.DataFrame, None]:
+    def _load_directory(
+        path: Path, columns: Optional[dict] = None
+    ) -> Union[pd.DataFrame, None]:
         """
         ## Loads a directory as a pd.DataFrame
-        Loads all the files in the directory containing a '.csv' suffix and do not contain '_DL_' in their name.
+        Loads all the files in the directory containing a '.csv' suffix and
+        do not contain '_DL_' in their name.
         """
         dataset = None
         # Grabs all the file names in the directory
@@ -160,12 +167,16 @@ class Discriminator(ABC):
                 # Make sure self.dataset is populated
                 if dataset is None:
                     if columns is not None:
-                        dataset = pd.read_csv(join(path, file), usecols=columns.keys(), dtype=columns)
+                        dataset = pd.read_csv(
+                            join(path, file), usecols=columns.keys(), dtype=columns
+                        )
                     else:
                         dataset = pd.read_csv(join(path, file))
                 else:
                     if columns is not None:
-                        df = pd.read_csv(join(path, file), usecols=columns.keys(), dtype=columns)
+                        df = pd.read_csv(
+                            join(path, file), usecols=columns.keys(), dtype=columns
+                        )
                     else:
                         df = pd.read_csv(join(path, file))
                     dataset = pd.concat([dataset, df], ignore_index=True)
@@ -193,16 +204,20 @@ class Discriminator(ABC):
         \tDict['test labels'] contains the test labels
 
         ### Args:
-                    \t values {str} -- The column in the dataset (dataframe) that contains the values. \n
-                    \t label {str} -- The column in the dataset (dataframe) that contains the labels. If not specified, it is assumed that the data is unsupervised. \n
-                    \t split_labels {bool} -- If True, the Dict['training labels'], Dict['test labels'] are populated with the labels. If False, the labels are kept in the arrays in Dict['Training Set'] resp. Dict['Test Set'] as an additional column. \n
-                    \t ratio {float} -- Fraction of the dataset that will become the training set. 1 - ratio will be the fraction of the test set \n
-                    \t seed {int} -- Seed for the RNG (For reproducing train_test_split) \n
+            \t values {str} -- The column in the dataset (dataframe) that contains the values. \n
+            \t label {str} -- The column in the dataset (dataframe) that contains the labels.
+            If not specified, it is assumed that the data is unsupervised. \n
+            \t split_labels {bool} -- If True, the Dict['training labels'],
+            Dict['test labels'] are populated with the labels. If False, the labels are kept in the arrays
+            in Dict['Training Set'] resp. Dict['Test Set'] as an additional column. \n
+            \t ratio {float} -- Fraction of the dataset that will become the training set.
+            1 - ratio will be the fraction of the test set \n
+            \t seed {int} -- Seed for the RNG (For reproducing train_test_split) \n
         ### Returns:
                     \t dict -- A dictionary containing the training set and test set
         """
         # Make sure everything starts off in order
-        assert ratio <= 1, f"Ratio must be less or equal to 1."
+        assert ratio <= 1, "Ratio must be less or equal to 1."
         assert self.dataset is not None, "Please load dataset."
 
         # Check if seed has been passed for reproducibility
@@ -249,7 +264,7 @@ class Discriminator(ABC):
         return {"training_set": training_set, "test_set": test_set}
 
     @staticmethod
-    def _columns_to_numpy(df: pd.DataFrame, cols: Union[list[str], str]):
+    def _columns_to_numpy(data_frame: pd.DataFrame, cols: Union[list[str], str]):
         """
         ## Private method: Converts a column from a dataframe to a numpy array.
         ### Args:
@@ -259,6 +274,6 @@ class Discriminator(ABC):
         out = []
 
         for col in cols:
-            out.append(df[col].to_numpy())
+            out.append(data_frame[col].to_numpy())
 
         return tuple(out)

@@ -4,16 +4,21 @@
     ------------------------------------------------------------------
 """
 
-
 from abc import ABC, abstractmethod
 from typing import Union
 import numpy.typing as npt
 
 
 class Encoder(ABC):
+    """
+    ## Encoder Base Class
+    """
+
+    def __init__(self):
+        self.sequence: Union[None, str] = None
 
     @abstractmethod
-    def encode(self,pad_size: int, flatten: bool = False) -> npt.ArrayLike:
+    def encode(self, pad_size: int, flatten: bool = False) -> npt.ArrayLike:
         """
         ## Encodes the sequence or array of sequences as a one-hot encoding.
         ### Args:
@@ -22,10 +27,11 @@ class Encoder(ABC):
         ### Returns:
                 \t {npt.ArrayLike}: Array of one-hot encoded amino acid sequence
         """
-        pass
 
     @abstractmethod
-    def encode_multiprocess(self, pad_size: int, ncpus: int, flatten: bool = False) -> npt.ArrayLike:
+    def encode_multiprocess(
+        self, pad_size: int, ncpus: int, flatten: bool = False
+    ) -> npt.ArrayLike:
         """
         ## Encodes the sequence or array of sequences as a one-hot encoding with multiprocessing.
         ### Args:
@@ -35,7 +41,6 @@ class Encoder(ABC):
         ### Returns:
                 \t {npt.ArrayLike}: Array of one-hot encoded amino acid sequence
         """
-        pass
 
     def set_sequence(self, sequence: Union[list[str], str, npt.ArrayLike]) -> None:
         """

@@ -9,23 +9,25 @@
 
 from typing import Literal, Optional, Union
 from pathlib import Path
+
 import numpy.typing as npt
-
+import numpy as np
 import tensorflow as tf
-from tensorflow import keras
 
-from Mousify.discriminators.discriminator import Discriminator
-from Mousify.discriminators.protein_vae.protein_vae_295k import ProtVAE
-from Mousify.encodings.encoder import Encoder
-from Mousify.encodings.onehotencoder import OneHot
+from tensorflow import keras
+from modules.species_scoring import Discriminator
+from modules.bytenet_vae_295k import ProtVAE
+from modules.encoder import Encoder
+from modules.onehotencoder import OneHot
 
 
 class AbVAE(Discriminator):
     """
     ## Antibody Variational Autoencoder Discriminator calculates humaness on information distance
-    The VAE is trained on a dataset of antibody sequences from different species. The different species clusters
-    in latent space are then fit with a gaussian distribution. A query sequence fits somewhere in the latent space
-    and  is represented as a distribution in latent space to calculate the information distance from the query to
+    The VAE is trained on a dataset of antibody sequences from different species.
+    The different species clusters in latent space are then fit with a gaussian distribution.
+    A query sequence fits somewhere in the latent space and  is represented as a distribution
+    in latent space to calculate the information distance from the query to
     the human cluster. Various distance calculations have been implemented. \n
     ### Args: \n
         \tsequence {str} -- Antibody sequence \n
@@ -42,10 +44,12 @@ class AbVAE(Discriminator):
         encoder: Union[Encoder, list[Encoder]],
         distance_function: Literal["kl", "mi"] = "kl",
     ):
+        super().__init__()
         self.sequence = sequence
         self.distance_function = distance_function
         self.model = model
         self.encoder = encoder
+        self.encoded: Union[None, npt.ArrayLike] = None
 
     def calculate_score(self) -> npt.DTypeLike:
         raise NotImplementedError
@@ -65,24 +69,13 @@ class AbVAE(Discriminator):
         Takes as input the training data, epoch number, batch sizes and an
         optional input for the optimizer. By default the optimizer is Adam.
         ### Args:
-            \tdataset {Array} -- Training data \n
-            \tepochs {int} -- Number of training epochs \n
-            \tbatch_size {int} -- Number of sequences per training batch \n
-            \toptimizer {Literal} --  Name of optimizer (See Keras website)\n
-            \tcallbacks {list[Callback]} -- List of callbacks (See Keras website) \n
-            \data_api {bool} -- If the data api is used as a dataset, batch_size is ignored.
+            dataset {Array} -- Training data \n
+            epochs {int} -- Number of training epochs \n
+            batch_size {int} -- Number of sequences per training batch \n
+            optimizer {Literal} --  Name of optimizer (See Keras website)\n
+            callbacks {list[Callback]} -- List of callbacks (See Keras website) \n
+            data_api {bool} -- If the data api is used as a dataset, batch_size is ignored.
         """
-        # # Configure GPU to not allocate all memory at once
-        # gpus = tf.config.list_physical_devices("GPU")
-        # if gpus:
-        #     try:
-        #         for gpu in gpus:
-        #             tf.config.experimental.set_memory_growth(gpu, True)
-        #         logical_gpus = tf.config.list_logical_devices("GPU")
-        #         print(len(gpus), "Physical GPUs, ", len(logical_gpus), "Logical GPUs")
-        #     except RuntimeError as e:
-        #         # Device cannot be modified
-        #         print(e)
 
         # Setup strategy to use more than one GPU
         if data_api:
@@ -110,27 +103,24 @@ class AbVAE(Discriminator):
                     validation_data=validation_data,
                     callbacks=callbacks,
                 )
-        except RuntimeError as e:
-            print(e)
+        except RuntimeError as error:
+            print(error)
 
-    def save_model(self, format: Literal["tf", "h5"], path: str) -> None:
+    def save_model(self, file_format: Literal["tf", "h5"], path: str) -> None:
         assert (
-            format == "h5" or format == "tf"
-        ), f"For VAE, save format needs to be tf or h5, not {format}"
-        self.model.save_weights(filepath=path, save_format=format)
+            file_format == "h5" or file_format == "tf"
+        ), f"For VAE, save format needs to be tf or h5, not {file_format}"
+        self.model.save_weights(filepath=path, save_format=file_format)
 
     def load_model(
         self,
-        format: Literal["tf", "h5"],
-        path: str,
-        input_shape: Union[
-            tuple[float, float, float], list[tuple[float, float, float]]
-        ],
+        file_format: Literal["tf", "h5"],
+        path: Path,
     ) -> None:
         assert (
-            format == "h5" or format == "tf"
-        ), f"For VAE, load format needs to be tf or h5, not {format}"
-        if format == "h5":
+            file_format == "h5" or file_format == "tf"
+        ), f"For VAE, load format needs to be tf or h5, not {file_format}"
+        if file_format == "h5":
             raise NotImplementedError("H5 is no longer supported for subclassed models")
         # self.model.build(input_shape=input_shape)
         self.model.load_weights(filepath=path).expect_partial()
@@ -146,14 +136,17 @@ class AbVAE(Discriminator):
         ## Encodes the sequence or list of sequences provided.
         If none is provided, it encodes self.sequence
         ### Args:
-                    \tmode {str} -- Defines whether to set the encoded attribute based on a single sequence or set of sequences,
-                                    or to return a numpy array with the encoded sequence.\n
-                            \tOptions: \n
-                            \t'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence \n
-                            \t'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided dataset
-                    \tdataset {npt.ArrayLike} -- Optional: Only needs to be defined in 'Dataset' or 'set' mode \n
-                    \tpad_size {int} -- How much to pad by if a fixed pad size is needed for the model to work\n
-                    \tncpus {int} -- Optional: Can be defined in dataset mode to accelerate encoding
+            mode {str} -- Defines whether to set the encoded attribute based on a single sequence or
+            set of sequences, or to return a numpy array with the encoded sequence.\n
+                Options: \n
+                'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence\n
+                'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided
+                 dataset \n
+            dataset {npt.ArrayLike} -- Optional: Only needs to be defined in 'Dataset'
+            or 'set' mode \n
+            pad_size {int} -- How much to pad by if a fixed pad size is needed for
+            the model to work \n
+            ncpus {int} -- Optional: Can be defined in dataset mode to accelerate encoding
         """
         # Figure out the encoding mode
         encoding_mode_factory = {
@@ -201,9 +194,7 @@ class AbVAE(Discriminator):
 
     def _encode_single_sequence(
         self,
-        dataset: npt.ArrayLike,
         pad_size: int,
-        ncpus: Optional[int],
         encoder: Optional[Encoder] = None,
     ) -> None:
         """
@@ -250,8 +241,6 @@ class AbVAE(Discriminator):
     @staticmethod
     def with_callbacks(
         tensorboard: bool = True,
-        model_checkpoint: bool = False,
-        save_best: bool = False,
         reduce_lr_on_plateau: bool = False,
         path: str = "../data/callbacks",
     ) -> list[keras.callbacks.Callback]:
@@ -264,20 +253,6 @@ class AbVAE(Discriminator):
         if tensorboard:
             tensorboard_callback = keras.callbacks.TensorBoard(log_dir=path)
             callbacks.append(tensorboard_callback)
-
-        if model_checkpoint:
-            checkpoint_path = Path(path + "/weights")
-            if not checkpoint_path.exists():
-                checkpoint_path.mkdir()
-            checkpoint_callback = keras.callbacks.ModelCheckpoint(
-                filepath=checkpoint_path / "/{epoch:02d}-{val_reconstruction_loss:.2f}",
-                monitor="val_reconstruction_loss",
-                save_weights_only=True,
-                mode="min",
-                save_best_only=save_best,
-            )
-            raise NotImplementedError("Cannot save checkpoints right now")
-            callbacks.append(checkpoint_callback)
 
         if reduce_lr_on_plateau:
             lr_callback = keras.callbacks.ReduceLROnPlateau(
@@ -292,20 +267,12 @@ class AbVAE(Discriminator):
 
 
 if __name__ == "__main__":
-    """
-    Try to load small dataset and train the VAE on small data
-    """
-    import numpy as np
 
-    model = ProtVAE(
+    model_used = ProtVAE(
         input_shape=(
             130,
             21,
         ),
-        # one_hot_shape=(
-        #     130,
-        #     21,
-        # ),
         latent_dimension_size=32,
         pid_algorithm=True,
         desired_kl=0.25,
@@ -315,18 +282,12 @@ if __name__ == "__main__":
     )
     Abmodel = AbVAE(
         sequence="",
-        model=model,
+        model=model_used,
         encoder=OneHot(),
     )
 
-    batch_size = 10
+    BATCH_SIZE_PARAM = 10
 
-    # esm_train_data_path = Path(
-    #     "/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_ESM_Encoded_Training_Set.npy"
-    # )
-    # esm_test_data_path = Path(
-    #     "/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_ESM_Encoded_Test_Set.npy"
-    # )
     onehot_train_data_path = Path(
         "/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_OH_Encoded_Training_Set.npy"
     )
@@ -334,40 +295,17 @@ if __name__ == "__main__":
         "/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_OH_Encoded_Test_Set.npy"
     )
 
-    # train_data = np.load(esm_train_data_path)
-    # test_data = np.load(esm_test_data_path)
     one_hot_train_data = np.load(onehot_train_data_path)
     one_hot_test_data = np.load(onehot_test_data_path)
 
     one_hot_train_data = tf.data.Dataset.from_tensor_slices(one_hot_train_data).batch(
-        batch_size
+        BATCH_SIZE_PARAM
     )
     one_hot_test_data = tf.data.Dataset.from_tensor_slices(one_hot_test_data).batch(
-        batch_size
+        BATCH_SIZE_PARAM
     )
 
-    # print("Training data shapes: ", train_data.shape, one_hot_train_data.shape)
-    # print("Test data shapes: ", test_data.shape, one_hot_test_data.shape, flush=True)
-
-    # "Load the data on the CPU not GPU"
-    # with tf.device("CPU"):
-    #     train_dataset = tf.data.Dataset.from_tensor_slices(train_data)
-    #     test_dataset = tf.data.Dataset.from_tensor_slices(test_data)
-    #     one_hot_train_dataset = tf.data.Dataset.from_tensor_slices(
-    #         one_hot_train_data
-    #     ).batch(batch_size)
-    #     one_hot_test_dataset = tf.data.Dataset.from_tensor_slices(
-    #         one_hot_test_data
-    #     ).batch(batch_size)
-
-    # train_dataset = train_dataset.zip((train_dataset, one_hot_train_dataset)).batch(
-    #     batch_size
-    # )
-    # test_dataset = train_dataset.zip((test_dataset, one_hot_test_dataset)).batch(
-    #     batch_size
-    # )
-
-    callbacks = Abmodel.with_callbacks(
+    callbacks_model = Abmodel.with_callbacks(
         tensorboard=True,
         reduce_lr_on_plateau=True,
         path="/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_dkl_025_300epochs_LD_32_derivative/callbacks",
@@ -376,12 +314,12 @@ if __name__ == "__main__":
     Abmodel.train_discriminator(
         dataset=one_hot_train_data,
         epochs=300,
-        batch_size=batch_size,
+        batch_size=BATCH_SIZE_PARAM,
         validation_data=one_hot_test_data,
-        callbacks=callbacks,
+        callbacks=callbacks_model,
         data_api=True,
     )
     Abmodel.save_model(
-        format="tf",
+        file_format="tf",
         path="/central/groups/smayo/lschaus/vae_test_data/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf",
     )

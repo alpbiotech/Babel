@@ -12,15 +12,14 @@
 """
 
 from typing import Union, Literal, Optional
-from tqdm import tqdm
 from math import isclose
-
-from Mousify.mutations.mutator import Mutator
-from Mousify.discriminators.discriminator import Discriminator
-from Mousify.maps.map import Map
+from tqdm import tqdm
 
 import numpy as np
 import numpy.typing as npt
+
+from modules.main import Mutator
+from modules.species_scoring import Discriminator
 
 
 class GreedyWalk(Mutator):
@@ -37,16 +36,15 @@ class GreedyWalk(Mutator):
     def __init__(
         self,
         discriminator: Discriminator,
-        map: Map,
         sequence: str,
         pad_size: int,
         seed: int | None = None,
         multishot: Union[int, Literal["all"]] = 1,
         n_rounds: Optional[int] = None,
         score_threshold: Optional[float] = None,
-        fully_greedy: bool = True
+        fully_greedy: bool = True,
     ):
-        super().__init__(discriminator, map, sequence, pad_size, seed)
+        super().__init__(discriminator, sequence, pad_size, seed)
 
         self.multishot = multishot
         if isinstance(self.multishot, str):
@@ -66,12 +64,14 @@ class GreedyWalk(Mutator):
         if n_rounds is not None:
             assert (
                 score_threshold is None
-            ), "Cannot set score_threshold and number of rounds as end condition simultaneously! One of them needs to be None."
+            ), "Cannot set score_threshold and number of rounds as end condition simultaneously! \
+            One of them needs to be None."
 
         if score_threshold is not None:
             assert (
                 n_rounds is None
-            ), "Cannot set score_threshold and number of rounds as end condition simultaneously! One of them needs to be None."
+            ), "Cannot set score_threshold and number of rounds as end condition simultaneously! \
+            One of them needs to be None."
 
         self.n_rounds = n_rounds
         self.score_threshold = score_threshold
@@ -85,14 +85,16 @@ class GreedyWalk(Mutator):
         ## Proposes a sequence based on the map provided
         Determines first what method to run based on the multishot attribute.
         ### Updates:
-        \tself.proposed_sequence {str} -- Amino acid sequence of the proposed sequence\n
-        \tself.transition_ID {tuple[int, str, str]} -- Transition ID says at what position the\n
+        self.proposed_sequence {str} -- Amino acid sequence of the proposed sequence\n
+        self.transition_ID {tuple[int, str, str]} -- Transition ID says at what position the\n
                                                         transition happened, what the original\n
                                                         amino acid was and what the new one is
         """
         assert (
             self.transition_matrix is not None
-        ), f"Transition matrix has not been set yet. Use set_transition_matrix method before running this method. Current type of transition matrix: {type(self.transition_matrix)}"
+        ), f"Transition matrix has not been set yet. \
+        Use set_transition_matrix method before running this method. \
+        Current type of transition matrix: {type(self.transition_matrix)}"
 
         # Factory to run the correct method based on multishot attribute
         propose_factory = {
@@ -127,15 +129,15 @@ class GreedyWalk(Mutator):
             self.transition_matrix[proposed_index[0], proposed_index[1]] = 0
             self.propose_singleshot()
         else:
-            self.transition_ID = (
+            self.transition_id = (
                 proposed_index[1],
                 self.sequence[proposed_index[1]],
                 self.inverted_amino_acids[proposed_index[0]],
             )
             self.proposed_sequence = (
-                self.sequence[: self.transition_ID[0]]
-                + self.transition_ID[2]
-                + self.sequence[self.transition_ID[0] + 1 :]
+                self.sequence[: self.transition_id[0]]
+                + self.transition_id[2]
+                + self.sequence[self.transition_id[0] + 1 :]
             )
 
     def propose_multishot(
@@ -185,7 +187,7 @@ class GreedyWalk(Mutator):
                     + self.proposed_sequence[item[1] + 1 :]
                 )
 
-            self.transition_ID = (
+            self.transition_id = (
                 position_list,
                 current_residue_list,
                 proposed_residue_list,
@@ -221,7 +223,7 @@ class GreedyWalk(Mutator):
                 current_amino_acid_list.append(self.sequence[position])
                 proposed_amino_acid_list.append(amino_acid_at_index)
 
-        self.transition_ID = (
+        self.transition_id = (
             position_list,
             current_amino_acid_list,
             proposed_amino_acid_list,
@@ -231,11 +233,13 @@ class GreedyWalk(Mutator):
         """
         ## Gets the score of the proposed sequence.
         ### Updates:
-                \tself.proposed_score {float} -- Score of the proposed sequence
+            self.proposed_score {float} -- Score of the proposed sequence
         """
         assert (
             self.proposed_sequence is not None
-        ), f"No proposed sequence found. Run propose method first. Current type of proposed_sequence is {type(self.proposed_sequence)}. Needs to be str."
+        ), f"No proposed sequence found. Run propose method first. \
+        Current type of proposed_sequence is {type(self.proposed_sequence)}. \
+        Needs to be str."
 
         self.configure_discriminator(
             pad_size=self.pad_size, sequence=self.proposed_sequence
@@ -255,7 +259,6 @@ class GreedyWalk(Mutator):
         self.update_registry(mode="accepted")
         return True
 
-
     def update_registry(self, mode: Literal["accepted"]):
         """
         ## Updates the sequence registry
@@ -263,7 +266,7 @@ class GreedyWalk(Mutator):
         self.sequence = self.proposed_sequence
         self.initial_score = self.proposed_score
         self.sequence_registry.append(
-            (self.proposed_sequence, mode, self.transition_ID, self.proposed_score)
+            (self.proposed_sequence, mode, self.transition_id, self.proposed_score)
         )
 
     def is_cycle(self, last_entry: Optional[tuple] = None) -> bool:
@@ -284,15 +287,23 @@ class GreedyWalk(Mutator):
             if ultimate_entry[2] == entry[2]:
                 # Check score
                 return isclose(ultimate_entry[3], entry[3])
-            
+
         # Check if it is a direct reversion of the previous entry
-        reverse_entry = (penultimate_entry[2][0], penultimate_entry[2][2], penultimate_entry[2][1])
+        reverse_entry = (
+            penultimate_entry[2][0],
+            penultimate_entry[2][2],
+            penultimate_entry[2][1],
+        )
         if ultimate_entry[2] == reverse_entry:
             return True
-        
+
         return False
-    
-    def humanization_cycle(self, allow: Union[None, Literal["CDR", "cdr"], list[int]], disallow: Union[None,list[int]]) -> bool:
+
+    def humanization_cycle(
+        self,
+        allow: Union[None, Literal["CDR", "cdr"], list[int]],
+        disallow: Union[None, list[int]],
+    ) -> bool:
         """
         ## Runs one humanization cycle
         """
@@ -305,18 +316,18 @@ class GreedyWalk(Mutator):
             # Return False if fully_greedy to break the loop
             if self.fully_greedy:
                 return False
-            
+
             # Usually a sign that the same cycle is started over and over again
             if self._cycle_counter > 3:
                 return False
-            
+
             # Set the mutation that causes the cycle to 0
             self.reset_transition_matrix()
             # Renove the previously accepted element
             self.sequence_registry.pop()
             # Reset the sequence
             self.sequence = self.sequence_registry[-1][0]
-        
+
             # Redo this round
             self.propose()
             self.set_score()
@@ -329,15 +340,19 @@ class GreedyWalk(Mutator):
         """
         ## Resets the previously proposed mutations to zero probability
         """
-        last_position = self.transition_ID[0]
-        proposed_mutation_amino_acids = self.transition_ID[-1]
+        last_position = self.transition_id[0]
+        proposed_mutation_amino_acids = self.transition_id[-1]
         # If the transition_ID came from multishot or allshot we need all to match
         if isinstance(last_position, list):
             # Axis 0 in transition_matrix represents the AA, and axis 1 the position
             for index, amino_acid in enumerate(proposed_mutation_amino_acids):
-                self.transition_matrix[self.amino_acid_dict[amino_acid], last_position[index]] = 0
+                self.transition_matrix[
+                    self.amino_acid_dict[amino_acid], last_position[index]
+                ] = 0
         else:
-            self.transition_matrix[self.amino_acid_dict[proposed_mutation_amino_acids], last_position] = 0
+            self.transition_matrix[
+                self.amino_acid_dict[proposed_mutation_amino_acids], last_position
+            ] = 0
 
     def run_humanization(
         self,
@@ -349,7 +364,7 @@ class GreedyWalk(Mutator):
         ## Runs humanization for Greedy Walk
         """
         if self.n_rounds is not None:
-            for round in tqdm(range(self.n_rounds)):
+            for _ in tqdm(range(self.n_rounds)):
                 # Run one cycle of humanization
                 continue_flag = self.humanization_cycle(allow=allow, disallow=disallow)
                 if not continue_flag:
@@ -357,7 +372,7 @@ class GreedyWalk(Mutator):
             return {"greedy_walk": self.sequence_registry}
 
         if self.score_threshold is not None:
-            for round in tqdm(range(max_iterations)):
+            for _ in tqdm(range(max_iterations)):
                 # Run one cycle of humanization
                 continue_flag = self.humanization_cycle(allow=allow, disallow=disallow)
                 if not continue_flag:
@@ -373,27 +388,25 @@ class GreedyWalk(Mutator):
 
 
 if __name__ == "__main__":
-    from Mousify.discriminators.oasis_discriminator import OASisDiscriminator
-    from Mousify.maps.sapiens_map import SapiensMap
 
-    sequence = "DIQLTQSPAIMSASPGEKVTMTCSASSSVGYMHWYQQKSSTSPKLWIYDTSKLASGVPGRFSGSGSGNSYSLTISSIQAEDVATYYCFQGSGYPFTFGQGTKLEIK"
-    disc = OASisDiscriminator(
-        sequence=sequence,
-        chain_type="heavy",
-        min_fraction_subjects=0.15,
-        score_type="OASis Identity",
-    )
-    disc.load_model(path="../data/OASis_9mers_v1.db")
-    umap = SapiensMap(sequence=sequence)
-    A = GreedyWalk(
-        discriminator=disc,
-        map=umap,
-        pad_size=131,
-        sequence=sequence,
-        multishot=1,
-        score_threshold=0.754,
-        fully_greedy=False
-    )
-    A.run_humanization(allow=None, disallow=None)
+    SEQUENCE_EXAMPLE = "DIQLTQSPAIMSASPGEKVTMTCSASSSVGYMHWYQQKSSTSPKLWIYDTSKLASGVPGRFSGSGSGNSYSLTISSIQAEDVATYYCFQGSGYPFTFGQGTKLEIK"
+    # disc = OASisDiscriminator(
+    #     sequence=SEQUENCE_EXAMPLE,
+    #     chain_type="heavy",
+    #     min_fraction_subjects=0.15,
+    #     score_type="OASis Identity",
+    # )
+    # disc.load_model(path="../data/OASis_9mers_v1.db")
+    # umap = SapiensMap(sequence=SEQUENCE_EXAMPLE)
+    # A = GreedyWalk(
+    #     discriminator=disc,
+    #     map=umap,
+    #     pad_size=131,
+    #     sequence=SEQUENCE_EXAMPLE,
+    #     multishot=1,
+    #     score_threshold=0.754,
+    #     fully_greedy=False,
+    # )
+    # A.run_humanization(allow=None, disallow=None)
 
-    print(A.sequence_registry, len(A.sequence_registry))
+    # print(A.sequence_registry, len(A.sequence_registry))

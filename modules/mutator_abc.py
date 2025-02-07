@@ -13,6 +13,7 @@ from typing import Literal, Optional, Union
 import numpy.typing as npt
 
 from modules.species_scoring import Discriminator
+from modules.immune_vae_scoring import ModelLoadConfig
 
 
 class Mutator(ABC):
@@ -36,6 +37,7 @@ class Mutator(ABC):
         discriminator: Discriminator,
         sequence: str,
         pad_size: int,
+        score_config: ModelLoadConfig,
         seed: Optional[int] = None,
     ):
         self.discriminator = discriminator
@@ -54,7 +56,9 @@ class Mutator(ABC):
 
         # Get initial score to compare against
         self.configure_discriminator(pad_size=self.pad_size, sequence=self.sequence)
-        self.initial_score = self.discriminator.calculate_score()
+        self.initial_score = self.discriminator.calculate_score(
+            score_config=score_config
+        )
         self.sequence_registry = [(sequence, "query", "query", self.initial_score)]
 
         # Dictionary to translate the amino acid single letter code to the internal index system
@@ -101,6 +105,7 @@ class Mutator(ABC):
             17: "W",
             18: "Y",
             19: "V",
+            20: "",
         }
 
         self._mutator_type = None
@@ -114,7 +119,7 @@ class Mutator(ABC):
         """
 
     @abstractmethod
-    def set_score(self):
+    def set_score(self, score_config: ModelLoadConfig):
         """
         ## Gets the score of the proposed sequence.
         Uses the discriminator to calculate the score of a proposed sequence.
@@ -142,21 +147,18 @@ class Mutator(ABC):
 
     def set_transition_matrix(
         self,
-        allow: Union[None, Literal["CDR", "cdr"], list[int]] = None,
-        disallow: Union[None, list[int]] = None,
     ):
         """
         ## Sets the transition matrix as an instance attribute.
 
         """
-        map_dictionary = self.discriminator.create_map(allow=allow, disallow=disallow)
+        map_dictionary = self.discriminator.create_map()
         self.transition_matrix = map_dictionary["transition_matrix"]
 
     @abstractmethod
     def run_humanization(
         self,
-        allow: Union[None, Literal["CDR", "cdr"], list[int]],
-        disallow: Union[None, list[int]],
+        score_config: ModelLoadConfig,
         max_iterations: int,
     ):
         """

@@ -12,14 +12,18 @@
 """
 
 from typing import Union, Literal, Optional
+from pathlib import Path
 from math import isclose
 from tqdm import tqdm
 
 import numpy as np
 import numpy.typing as npt
 
-from modules.main import Mutator
+from modules.mutator_abc import Mutator
 from modules.species_scoring import Discriminator
+from modules.immune_vae_scoring import AbVAE, ModelLoadConfig
+from modules.bytenet_vae_295k import ProtVAE
+from modules.onehotencoder import OneHot
 
 
 class GreedyWalk(Mutator):
@@ -38,6 +42,7 @@ class GreedyWalk(Mutator):
         discriminator: Discriminator,
         sequence: str,
         pad_size: int,
+        score_config: ModelLoadConfig,
         seed: int | None = None,
         multishot: Union[int, Literal["all"]] = 1,
         n_rounds: Optional[int] = None,
@@ -206,7 +211,7 @@ class GreedyWalk(Mutator):
         proposed_amino_acid_list = []
 
         # Go through each position and ignore masked positions
-        for position, residue_vector in enumerate(self.transition_matrix.T):
+        for position, residue_vector in enumerate(self.transition_matrix):
             # Ignore masked positions
             if np.sum(residue_vector) == 0:
                 # Write original residue at ignored position
@@ -214,6 +219,8 @@ class GreedyWalk(Mutator):
                 continue
 
             index = np.argmax(residue_vector)
+            if index == 20:
+                continue
             amino_acid_at_index = self.inverted_amino_acids[index]
             # Write out the proposed sequence
             self.proposed_sequence += amino_acid_at_index
@@ -229,7 +236,7 @@ class GreedyWalk(Mutator):
             proposed_amino_acid_list,
         )
 
-    def set_score(self):
+    def set_score(self, score_config: ModelLoadConfig):
         """
         ## Gets the score of the proposed sequence.
         ### Updates:
@@ -244,7 +251,9 @@ class GreedyWalk(Mutator):
         self.configure_discriminator(
             pad_size=self.pad_size, sequence=self.proposed_sequence
         )
-        self.proposed_score = self.discriminator.calculate_score()
+        self.proposed_score = self.discriminator.calculate_score(
+            score_config=score_config
+        )
 
     def set_decision(self) -> bool:
         """
@@ -299,17 +308,13 @@ class GreedyWalk(Mutator):
 
         return False
 
-    def humanization_cycle(
-        self,
-        allow: Union[None, Literal["CDR", "cdr"], list[int]],
-        disallow: Union[None, list[int]],
-    ) -> bool:
+    def humanization_cycle(self, score_config: ModelLoadConfig) -> bool:
         """
         ## Runs one humanization cycle
         """
-        self.set_transition_matrix(allow=allow, disallow=disallow)
+        self.set_transition_matrix()
         self.propose()
-        self.set_score()
+        self.set_score(score_config)
         self.set_decision()
         # Check for cycle
         if self.is_cycle():
@@ -330,7 +335,7 @@ class GreedyWalk(Mutator):
 
             # Redo this round
             self.propose()
-            self.set_score()
+            self.set_score(score_config)
             self.set_decision()
 
         # Return True to continue the loop
@@ -356,8 +361,7 @@ class GreedyWalk(Mutator):
 
     def run_humanization(
         self,
-        allow: Union[None, Literal["CDR", "cdr"], list[int]],
-        disallow: Union[None, list[int]],
+        score_config: ModelLoadConfig,
         max_iterations: int = 100,
     ):
         """
@@ -366,7 +370,7 @@ class GreedyWalk(Mutator):
         if self.n_rounds is not None:
             for _ in tqdm(range(self.n_rounds)):
                 # Run one cycle of humanization
-                continue_flag = self.humanization_cycle(allow=allow, disallow=disallow)
+                continue_flag = self.humanization_cycle(score_config)
                 if not continue_flag:
                     break
             return {"greedy_walk": self.sequence_registry}
@@ -374,7 +378,7 @@ class GreedyWalk(Mutator):
         if self.score_threshold is not None:
             for _ in tqdm(range(max_iterations)):
                 # Run one cycle of humanization
-                continue_flag = self.humanization_cycle(allow=allow, disallow=disallow)
+                continue_flag = self.humanization_cycle(score_config)
                 if not continue_flag:
                     break
                 if self.initial_score > self.score_threshold:
@@ -388,25 +392,65 @@ class GreedyWalk(Mutator):
 
 
 if __name__ == "__main__":
+    TEST_SEQUENCE_MOUSE = "QVKLQQSGPELKKPGETVKISCKASGYTFTDYSMHWVKQAPGKGLKWLGRINTETGEAKYVDDFMGHLAFSLETSASTAYLQINNLKNEDTATYFCARYDGYSWDAMDYWGQGTSVIVSS"
+    TEST_SEQUENCE_HUMAN = "QVQLVQSGAEVKKPGSSVRVSCKASGDTFSSYSITWVRQAPGHGLQWMGGIFPIFGSTNYAQKFDDRLTITTDDSSRTVYMELTSLRLEDTAVYYCARGASKVEPAAPAYSDAFDMWGQGTLVTVSS"
+    WEIGHTS_PATH = Path(
+        "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
+    )
+    CALIBRATION_DATA_PATH = Path("./calibration_data/VAE_test_data.csv")
+    PCA_DATA_PATH = Path("./calibration_data/pca_calibration_data")
+    NORMAL_DISTRIBUTION_DATA = Path(
+        "./calibration_data/gaussian_full_representation.json"
+    )
 
-    SEQUENCE_EXAMPLE = "DIQLTQSPAIMSASPGEKVTMTCSASSSVGYMHWYQQKSSTSPKLWIYDTSKLASGVPGRFSGSGSGNSYSLTISSIQAEDVATYYCFQGSGYPFTFGQGTKLEIK"
-    # disc = OASisDiscriminator(
-    #     sequence=SEQUENCE_EXAMPLE,
-    #     chain_type="heavy",
-    #     min_fraction_subjects=0.15,
-    #     score_type="OASis Identity",
-    # )
-    # disc.load_model(path="../data/OASis_9mers_v1.db")
-    # umap = SapiensMap(sequence=SEQUENCE_EXAMPLE)
-    # A = GreedyWalk(
-    #     discriminator=disc,
-    #     map=umap,
-    #     pad_size=131,
-    #     sequence=SEQUENCE_EXAMPLE,
-    #     multishot=1,
-    #     score_threshold=0.754,
-    #     fully_greedy=False,
-    # )
-    # A.run_humanization(allow=None, disallow=None)
+    INPUT_SHAPE = (
+        130,
+        21,
+    )
 
-    # print(A.sequence_registry, len(A.sequence_registry))
+    vae_model = ProtVAE(
+        input_shape=(
+            130,
+            21,
+        ),
+        latent_dimension_size=32,
+        pid_algorithm=True,
+        desired_kl=0.25,
+        proportional_kl=0.01,
+        integral_kl=0.0001,
+        derivative_kl=0.0001,
+    )
+
+    discriminator_model = AbVAE(
+        sequence="",
+        model=vae_model,
+        encoder=OneHot(),
+    )
+    # Create Config
+    model_configuration = ModelLoadConfig(
+        file_format="tf",
+        path=WEIGHTS_PATH,
+        calibration_data_path=CALIBRATION_DATA_PATH,
+        pca_data_path=PCA_DATA_PATH,
+        gaussian_data_path=NORMAL_DISTRIBUTION_DATA,
+    )
+
+    # Load Model
+    discriminator_model.load_model(model_configuration)
+
+    # Instantiate Greedy Walk
+    humanization_pipeline = GreedyWalk(
+        discriminator=discriminator_model,
+        pad_size=130,
+        sequence=TEST_SEQUENCE_MOUSE,
+        multishot=1,
+        n_rounds=10,
+        score_config=model_configuration,
+    )
+
+    humanization_pipeline.run_humanization(score_config=model_configuration)
+
+    print(
+        humanization_pipeline.sequence_registry,
+        len(humanization_pipeline.sequence_registry),
+    )

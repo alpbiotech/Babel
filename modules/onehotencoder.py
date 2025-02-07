@@ -10,6 +10,8 @@
 
 import re
 from typing import Optional
+from functools import partial
+from multiprocessing import Pool
 
 import numpy as np
 import numpy.typing as npt
@@ -17,8 +19,6 @@ import numpy.typing as npt
 
 from abnumber import Chain
 from abnumber.exceptions import ChainParseError
-from functools import partial
-from multiprocessing import Pool
 from tqdm import tqdm
 
 from modules.encoder import Encoder
@@ -81,11 +81,15 @@ class OneHot(Encoder):
         )
 
         # Populate array
-        for i, sequence in enumerate(self.sequence):
+        for i, sequence in tqdm(enumerate(self.sequence), total=len(self.sequence)):
             try:
                 sequence_numbered = Chain(sequence, "imgt")
-            except ChainParseError:
-                continue
+            except ChainParseError as error:
+                print(
+                    "Provided sequence not recognized as an antibody heavy chain by ANARCI!",
+                    flush=True,
+                )
+                raise error
             sequence = sequence_numbered.seq
 
             if normalize_encoding:
@@ -102,19 +106,8 @@ class OneHot(Encoder):
                     pad_size=pad_size,
                 )
 
-        # Remove sequences that threw an exception
-        remove_index = []
-        for i, sequence in enumerate(encoded):
-            for position in sequence:
-                if np.sum(position) == 0:
-                    remove_index.append(i)
-                    break
-
-        encoded = np.delete(encoded, remove_index, axis=0)
-
         if flatten:
             return self.flatten(encoded)
-
         return encoded
 
     def populate_array(

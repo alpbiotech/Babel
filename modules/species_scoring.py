@@ -9,15 +9,17 @@
 from abc import ABC, abstractmethod
 from os import listdir
 from os.path import isfile, join
-from typing import Literal, Union, Optional
+from typing import Literal, Union, Optional, Generic, TypeVar
 from pathlib import Path
 
 import numpy.typing as npt
 import pandas as pd
 
+T = TypeVar("T")
+
 
 # Abstract Base Class for Discriminator module
-class Discriminator(ABC):
+class Discriminator(ABC, Generic[T]):
     """
     ## Discriminator Base Class
     Used to calculate the humanization score of the antibody sequence. \n
@@ -33,7 +35,7 @@ class Discriminator(ABC):
         self.sequence: Union[None, str] = None
 
     @abstractmethod
-    def calculate_score(self) -> npt.DTypeLike:
+    def calculate_score(self, score_config: Optional[T]) -> npt.DTypeLike:
         """
         Calculate the sequences' score [0,1] based on the model used.
         ### Returns:
@@ -71,7 +73,7 @@ class Discriminator(ABC):
         """
 
     @abstractmethod
-    def load_model(self, file_format: Literal["pickle", "json"], path: Path) -> None:
+    def load_model(self, loading_config: T) -> None:
         """
         ## Method that loads the pickle or json file from a pre-trained model.
         Load model sets the weights contained in the pickle or json file as the
@@ -98,12 +100,13 @@ class Discriminator(ABC):
         ## Encodes the sequence or list of sequences provided.
         If none is provided, it encodes self.sequence
         ### Args:
-            \tmode {str} -- Defines whether to set the encoded attribute based on a single sequence or
-            set of sequences, or to return a numpy array with the encoded sequence.\n
-                \tOptions: \n
-                \t'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence \n
-                \t'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided dataset
-            \tdataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
+            mode {str} -- Defines whether to set the encoded attribute based on a single sequence
+            or set of sequences, or to return a numpy array with the encoded sequence.\n
+                Options: \n
+                'Sequence' or 'seq' -- Sets self.encoded with the encoded version of self.sequence\n
+                'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided
+                dataset \n
+            dataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
         """
 
     def load_query(self, sequence: str) -> None:
@@ -161,7 +164,7 @@ class Discriminator(ABC):
             for file in listdir(path)
             if isfile(join(path, file)) and ".csv" in file
         ]
-        # Loads all the files that do not contain '_DL_' in their name (Meaning unprocessed form OAS)
+        # Loads all the files that do not contain '_DL_' in their name
         for file in files:
             if "_DL_" not in file:
                 # Make sure self.dataset is populated
@@ -174,12 +177,12 @@ class Discriminator(ABC):
                         dataset = pd.read_csv(join(path, file))
                 else:
                     if columns is not None:
-                        df = pd.read_csv(
+                        data_frame = pd.read_csv(
                             join(path, file), usecols=columns.keys(), dtype=columns
                         )
                     else:
-                        df = pd.read_csv(join(path, file))
-                    dataset = pd.concat([dataset, df], ignore_index=True)
+                        data_frame = pd.read_csv(join(path, file))
+                    dataset = pd.concat([dataset, data_frame], ignore_index=True)
 
         # Make sure at least one file was found
         assert dataset is not None, "No files found that could be loaded."
@@ -208,7 +211,8 @@ class Discriminator(ABC):
             \t label {str} -- The column in the dataset (dataframe) that contains the labels.
             If not specified, it is assumed that the data is unsupervised. \n
             \t split_labels {bool} -- If True, the Dict['training labels'],
-            Dict['test labels'] are populated with the labels. If False, the labels are kept in the arrays
+            Dict['test labels'] are populated with the labels. If False,
+            the labels are kept in the arrays
             in Dict['Training Set'] resp. Dict['Test Set'] as an additional column. \n
             \t ratio {float} -- Fraction of the dataset that will become the training set.
             1 - ratio will be the fraction of the test set \n

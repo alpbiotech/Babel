@@ -463,8 +463,19 @@ class AbVAE(Discriminator):
 
         return callbacks
 
-    def create_map(self):
-        return super().create_map()
+    def create_map(
+        self,
+    ):  # latent_representation: npt.ArrayLike):
+        """
+        ## Calculates the Transition Matrix for a given sequence input
+        """
+        # Get Latent Representation
+        latent_representation = self.model.encoder.predict(self.encoded)
+        latent_representation = latent_representation[
+            0
+        ]  # Tensor output needs to be sliced
+        transition_matrix = self.model.decoder.predict(latent_representation)
+        return transition_matrix
 
 
 if __name__ == "__main__":
@@ -509,5 +520,5 @@ if __name__ == "__main__":
     Abmodel.load_model(model_configuration)
     Abmodel.sequence = TEST_SEQUENCE_MOUSE
     print(Abmodel.calculate_score(model_configuration))
-    Abmodel.sequence = TEST_SEQUENCE_HUMAN
-    print(Abmodel.calculate_score(model_configuration))
+    transition_map = Abmodel.create_map()
+    print(transition_map[0][0])

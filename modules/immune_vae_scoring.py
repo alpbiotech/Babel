@@ -463,12 +463,15 @@ class AbVAE(Discriminator):
 
         return callbacks
 
+    def create_map(self):
+        return super().create_map()
+
 
 if __name__ == "__main__":
     TEST_SEQUENCE_MOUSE = "QVKLQQSGPELKKPGETVKISCKASGYTFTDYSMHWVKQAPGKGLKWLGRINTETGEAKYVDDFMGHLAFSLETSASTAYLQINNLKNEDTATYFCARYDGYSWDAMDYWGQGTSVIVSS"
     TEST_SEQUENCE_HUMAN = "QVQLVQSGAEVKKPGSSVRVSCKASGDTFSSYSITWVRQAPGHGLQWMGGIFPIFGSTNYAQKFDDRLTITTDDSSRTVYMELTSLRLEDTAVYYCARGASKVEPAAPAYSDAFDMWGQGTLVTVSS"
     WEIGHTS_PATH = Path(
-        "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"
+        "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
     )
     CALIBRATION_DATA_PATH = Path("./calibration_data/VAE_test_data.csv")
     PCA_DATA_PATH = Path("./calibration_data/pca_calibration_data")

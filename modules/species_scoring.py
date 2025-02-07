@@ -109,6 +109,12 @@ class Discriminator(ABC, Generic[T]):
             dataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
         """
 
+    @abstractmethod
+    def create_map(self) -> npt.ArrayLike:
+        """
+        ## Creates Probability Map for the next sequence
+        """
+
     def load_query(self, sequence: str) -> None:
         """
         ## Sets the sequence attribute for the class.

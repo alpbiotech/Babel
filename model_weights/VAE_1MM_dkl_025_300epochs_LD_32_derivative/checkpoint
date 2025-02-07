@@ -1,0 +1,2 @@
+model_checkpoint_path: "VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"
+all_model_checkpoint_paths: "VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"

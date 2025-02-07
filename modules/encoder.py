@@ -15,7 +15,7 @@ class Encoder(ABC):
     """
 
     def __init__(self):
-        self.sequence: Union[None, str] = None
+        self.sequence: Union[list[str], str, npt.ArrayLike, None] = None
 
     @abstractmethod
     def encode(self, pad_size: int, flatten: bool = False) -> npt.ArrayLike:

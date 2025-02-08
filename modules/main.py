@@ -411,7 +411,8 @@ class GreedyWalk(Mutator):
         raise NotImplementedError(
             "Maximum likelihood-type mutators do not have warmups"
         )
-def main():
+
+def main(TEST_SEQUENCE: str) -> dict:
     WEIGHTS_PATH = Path(
         "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
     )
@@ -458,47 +459,52 @@ def main():
     discriminator_model.load_model(model_configuration)
 
     # Program Loop Start
-    while True:
-        TEST_SEQUENCE = input(
-            "Please input the heavy variable domain of an antibody of interest: "
-        )
-        try:
-            Chain(TEST_SEQUENCE, "imgt")
-        except ChainParseError as cpe:
-            print("Input sequence needs to be a heavy variable domain of an antibody!")
-            print(f"An error occurred: {cpe}")
+    try:
+        Chain(TEST_SEQUENCE, "imgt")
+    except ChainParseError as cpe:
+        print("Input sequence needs to be a heavy variable domain of an antibody!")
+        print(f"An error occurred: {cpe}")
 
-            continue
-        # Mapping Model
-        map_model = HumabMap(
-            sequence=TEST_SEQUENCE,
-            discriminator=discriminator_model,
-            score_config=model_configuration,
-            pad_size=130,
-            scheme="imgt",
-            n_jobs=NCPUS,
-        )
+    # Mapping Model
+    map_model = HumabMap(
+        sequence=TEST_SEQUENCE,
+        discriminator=discriminator_model,
+        score_config=model_configuration,
+        pad_size=130,
+        scheme="imgt",
+        n_jobs=NCPUS,
+    )
 
-        # Instantiate Greedy Walk
-        humanization_pipeline = GreedyWalk(
-            discriminator=discriminator_model,
-            mapping=map_model,
-            pad_size=130,
-            sequence=TEST_SEQUENCE,
-            multishot=10,
-            n_rounds=1,
-            score_config=model_configuration,
-        )
+    # Instantiate Greedy Walk
+    humanization_pipeline = GreedyWalk(
+        discriminator=discriminator_model,
+        mapping=map_model,
+        pad_size=130,
+        sequence=TEST_SEQUENCE,
+        multishot=10,
+        n_rounds=1,
+        score_config=model_configuration,
+    )
 
-        humanization_pipeline.run_humanization(score_config=model_configuration)
+    humanization_pipeline.run_humanization(score_config=model_configuration)
 
-        print("De-immunized Sequence: ", humanization_pipeline.sequence_registry[-1][0])
-        start_score = humanization_pipeline.sequence_registry[0][-1]
-        end_score = humanization_pipeline.sequence_registry[-1][-1]
-        print(
-            f"Humanness increased from {round(start_score, 3)} to {round(end_score, 3)}"
-        )
+    de_immunized_seq = humanization_pipeline.sequence_registry[-1][0]
+    start_score = humanization_pipeline.sequence_registry[0][-1]
+    start_score = round(start_score, 3)
+    end_score = humanization_pipeline.sequence_registry[-1][-1]
+    end_score = round(end_score, 3)
+
+    print(f"De-immunized Sequence: {de_immunized_seq}")
+    print(
+        f"Humanness increased from {start_score} to {end_score}"
+    )
+
+    return {
+        "DeImmunizedSequence": de_immunized_seq,
+        "HummannessScoreStart": start_score,
+        "HummannessScoreEnd": end_score
+    }
 
 
 if __name__ == "__main__":
-    main()
+    print("This version only supports calls from the API.")

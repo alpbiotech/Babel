@@ -411,9 +411,7 @@ class GreedyWalk(Mutator):
         raise NotImplementedError(
             "Maximum likelihood-type mutators do not have warmups"
         )
-
-
-if __name__ == "__main__":
+def main():
     WEIGHTS_PATH = Path(
         "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
     )
@@ -471,7 +469,6 @@ if __name__ == "__main__":
             print(f"An error occurred: {cpe}")
 
             continue
-
         # Mapping Model
         map_model = HumabMap(
             sequence=TEST_SEQUENCE,
@@ -501,3 +498,7 @@ if __name__ == "__main__":
         print(
             f"Humanness increased from {round(start_score, 3)} to {round(end_score, 3)}"
         )
+
+
+if __name__ == "__main__":
+    main()

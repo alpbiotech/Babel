@@ -81,7 +81,7 @@ class OneHot(Encoder):
         )
 
         # Populate array
-        for i, sequence in tqdm(enumerate(self.sequence), total=len(self.sequence)):
+        for i, sequence in enumerate(self.sequence):
             try:
                 sequence_numbered = Chain(sequence, "imgt")
             except ChainParseError as error:

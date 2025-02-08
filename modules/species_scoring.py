@@ -33,6 +33,8 @@ class Discriminator(ABC, Generic[T]):
         self.model = None
         self.model_path: Optional[Path] = None
         self.sequence: Union[None, str] = None
+        self.map_generation_attempts: int = 0
+        self.max_map_generation_attempts: int = 1000
 
     @abstractmethod
     def calculate_score(self, score_config: Optional[T]) -> npt.DTypeLike:
@@ -107,12 +109,6 @@ class Discriminator(ABC, Generic[T]):
                 'Dataset' or 'set' -- Returns npt.ArrayLike with the encoded version of the provided
                 dataset \n
             dataset {npt.ArrayLike} -- Only needs to be defined in 'Dataset' or 'set' mode
-        """
-
-    @abstractmethod
-    def create_map(self) -> npt.ArrayLike:
-        """
-        ## Creates Probability Map for the next sequence
         """
 
     def load_query(self, sequence: str) -> None:

@@ -14,6 +14,7 @@ import numpy.typing as npt
 
 from modules.species_scoring import Discriminator
 from modules.immune_vae_scoring import ModelLoadConfig
+from modules.map import Map
 
 
 class Mutator(ABC):
@@ -35,12 +36,14 @@ class Mutator(ABC):
     def __init__(
         self,
         discriminator: Discriminator,
+        mapping: Map,
         sequence: str,
         pad_size: int,
         score_config: ModelLoadConfig,
         seed: Optional[int] = None,
     ):
         self.discriminator = discriminator
+        self.mapping = mapping
         self.sequence = sequence
         self.pad_size = pad_size
         self.proposed_sequence = None
@@ -48,6 +51,7 @@ class Mutator(ABC):
         self.transition_matrix: Union[npt.ArrayLike, None] = None
         self.transition_id: Union[tuple, None] = None
         self.proposed_sequence: Union[str, None] = None
+        self.score_config: ModelLoadConfig = score_config
 
         # Set the seed
         if seed is not None:
@@ -57,7 +61,7 @@ class Mutator(ABC):
         # Get initial score to compare against
         self.configure_discriminator(pad_size=self.pad_size, sequence=self.sequence)
         self.initial_score = self.discriminator.calculate_score(
-            score_config=score_config
+            score_config=self.score_config
         )
         self.sequence_registry = [(sequence, "query", "query", self.initial_score)]
 
@@ -147,19 +151,28 @@ class Mutator(ABC):
 
     def set_transition_matrix(
         self,
+        allow: Union[None, Literal["CDR", "cdr"], list[int]] = None,
+        disallow: Union[None, list[int]] = None,
+        quantile: Optional[float] = None,
     ):
         """
         ## Sets the transition matrix as an instance attribute.
 
         """
-        map_dictionary = self.discriminator.create_map()
+        map_dictionary = self.mapping.create_map(allow=allow, disallow=disallow)
+        if quantile is not None:
+            map_dictionary = self.mapping.filter_transition_matrix(
+                transition_dictionary=map_dictionary, quantile=quantile
+            )
         self.transition_matrix = map_dictionary["transition_matrix"]
 
     @abstractmethod
     def run_humanization(
         self,
         score_config: ModelLoadConfig,
-        max_iterations: int,
+        allow: Union[None, Literal["CDR", "cdr"], list[int]] = None,
+        disallow: Union[None, list[int]] = None,
+        max_iterations: int = 100,
     ):
         """
         ## Runs humanization for a specific mutator

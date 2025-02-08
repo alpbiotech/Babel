@@ -9,7 +9,6 @@
 
 import json
 import pickle
-import re
 from typing import Literal, Optional, Union
 from pathlib import Path
 from dataclasses import dataclass
@@ -24,7 +23,6 @@ from tensorflow import keras
 from sklearn.decomposition import PCA
 from scipy import stats
 from scipy.spatial import distance
-from abnumber import Chain, Position
 
 from modules.species_scoring import Discriminator
 from modules.bytenet_vae_295k import ProtVAE
@@ -80,6 +78,7 @@ class AbVAE(Discriminator):
         self.gaussian_parameter_dict: dict[str, npt.ArrayLike] = {}
         self.pca_model: Union[None, PCA] = None
         self.gaussian_full_data: Union[dict[str, npt.ArrayLike], None] = None
+
         self.inverted_amino_acids = {
             0: "A",
             1: "R",
@@ -511,134 +510,6 @@ class AbVAE(Discriminator):
 
         return callbacks
 
-    def create_map(
-        self,
-    ) -> npt.ArrayLike:
-        """
-        ## Calculates the Transition Matrix for a given sequence input
-        First calculates the transition matrix and transposes it by a unit
-        vector in direction of the human cluster. Then the sequence is reconstructed
-        and numbered using Abnumbering. The CDRs are then masked in the transition
-        matrix.
-        """
-        # Get the latent representation
-        latent_representation = self.model.encoder.predict(self.encoded)
-        latent_representation = latent_representation[0]
-        # Move the latent representation closer toward a sample of the human cluster
-        human_vector_representative = np.random.multivariate_normal(
-            mean=self.gaussian_full_data["mean"],
-            cov=self.gaussian_full_data["covariance"],
-        )
-        human_direction = human_vector_representative / (
-            np.linalg.norm(human_vector_representative)
-            - np.linalg.norm(latent_representation)
-        )
-        sequence = ""
-        transition_matrix = self.model.decoder.predict(
-            np.array([human_vector_representative])
-        )
-        transition_matrix = transition_matrix[0]
-        for _, residue_vector in enumerate(transition_matrix):
-            index = np.argmax(residue_vector)
-            amino_acid_at_index = self.inverted_amino_acids[index]
-            sequence += amino_acid_at_index
-
-        cdr_indices = self._find_cdr_indices(scheme="imgt", sequence=sequence)
-        # Set CDR probability to 0
-        for index in cdr_indices:
-            transition_matrix[index, :] = 0
-        # Normalize the map
-        norm = np.sum(transition_matrix)
-        transition_matrix = transition_matrix / norm
-        return {
-            "transition_matrix": transition_matrix,
-            "coupling_matrix": np.array(None),
-        }
-
-    def _find_cdr_indices(
-        self,
-        scheme: Union[
-            Literal["imgt", "chothia", "kabath", "aho"],
-            None,
-        ],
-        sequence: str,
-    ) -> list[int]:
-        """
-        ## Finds the CDR of the sequence
-        Uses abnumber to find the CDRs with imgt. Optional to switch to chothia, kabath or aho.
-        One can also provide custom CDR indices using the custom_CDR argument.
-        After establishing the CDR indices, the return value is packaged into a list of tuples
-        containing the boundaries of non-mutatable regions for the Map.
-        ### Args:
-                \tscheme {str} -- Type of scheme system to be used to find CDR and FWR\n
-        ### Returns:
-                \tlist[int] -- List of indices containing the disallowed regions for the Map.
-        """
-        # Use abnumber numbering methods
-        chain = Chain(sequence, scheme=scheme)
-        disallowed_regions_abnumber = self._get_cdr_indices_from_abnumber(chain=chain)
-        # The disallowed regions in abnumber are aligned to the imgt numbering
-        disallowed_regions = []
-        chain_numbering = [pos for pos, aa in chain]
-        for index, numbering in enumerate(chain_numbering):
-            # convert from position to str and drop the prefix
-            position = str(numbering)[1:]
-            # Convert to int to compare to the output from abnumber
-            position = re.sub("[A-Z]", "", position)
-            if int(position) in disallowed_regions_abnumber:
-                disallowed_regions.append(index)
-        return disallowed_regions
-
-    @staticmethod
-    def _get_cdr_indices_from_abnumber(
-        chain: Chain,
-        attribute: Union[Literal["cdr1", "cdr2", "cdr3"], None] = None,
-    ) -> list:
-        """
-        ## Uses Abnumber to get cdr positions
-        """
-        attr_dict = {
-            "cdr1": chain.cdr1_dict,
-            "cdr2": chain.cdr2_dict,
-            "cdr3": chain.cdr3_dict,
-        }
-
-        # If only one cdr wants to be selected as disallowed
-        if attribute is not None:
-            numbered_list = list(attr_dict[attribute].keys())
-
-        else:
-            # Convert the cdr_dict to a abnumber.Position object
-            numbered_list: list[Position] = []
-            for attr in list(attr_dict.values()):
-                numbered_list += list(attr.keys())
-            # Convert abnumber.Position entry to str
-            numbered_list = [item.format() for item in numbered_list]
-
-        # Define the prefix
-        prefix = numbered_list[0][0]
-        assert prefix in [
-            "H",
-            "K",
-            "L",
-        ], f"Prefix: {prefix} is not an appropriate prefix. Must be H, K or L"
-        # In case a subindex of IMGT is found, we need to shif the indices by 1 for each
-        shift = 0
-        cdr_indices = []
-        # Extract indices from numbered_list
-        for index in numbered_list:
-            index = index.replace(prefix, "")
-            # Find subindex, remove the letter, append to indices and shift sequence by 1
-            if re.search("[A-Z]", index):
-                index = re.sub("[A-Z]", "", index)
-                cdr_indices.append(int(index) + shift)
-                shift += 1
-                continue
-
-            # Abnumber does not 0-index
-            cdr_indices.append(int(index) + shift)
-        return cdr_indices
-
 
 if __name__ == "__main__":
     TEST_SEQUENCE_MOUSE = "QVKLQQSGPELKKPGETVKISCKASGYTFTDYSMHWVKQAPGKGLKWLGRINTETGEAKYVDDFMGHLAFSLETSASTAYLQINNLKNEDTATYFCARYDGYSWDAMDYWGQGTSVIVSS"
@@ -683,9 +554,6 @@ if __name__ == "__main__":
         gaussian_data_path=NORMAL_DISTRIBUTION_DATA,
     )
     # Load Model
-    Abmodel.save_pca_representation(model_configuration)
-    # Abmodel.sequence = TEST_SEQUENCE_MOUSE
-    # print(Abmodel.calculate_score(model_configuration))
-    # transition_map = Abmodel.create_map()
-    # for item in transition_map:
-    #     print(item)
+    Abmodel.load_model(model_configuration)
+    Abmodel.sequence = TEST_SEQUENCE_MOUSE
+    print(Abmodel.calculate_score(model_configuration))

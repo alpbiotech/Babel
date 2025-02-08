@@ -19,11 +19,14 @@ from tqdm import tqdm
 import numpy as np
 import numpy.typing as npt
 
+from abnumber import Chain, ChainParseError
 from modules.mutator_abc import Mutator
 from modules.species_scoring import Discriminator
 from modules.immune_vae_scoring import AbVAE, ModelLoadConfig
 from modules.bytenet_vae_295k import ProtVAE
 from modules.onehotencoder import OneHot
+from modules.map import Map
+from modules.humab_map import HumabMap
 
 
 class GreedyWalk(Mutator):
@@ -40,6 +43,7 @@ class GreedyWalk(Mutator):
     def __init__(
         self,
         discriminator: Discriminator,
+        mapping: Map,
         sequence: str,
         pad_size: int,
         score_config: ModelLoadConfig,
@@ -49,7 +53,14 @@ class GreedyWalk(Mutator):
         score_threshold: Optional[float] = None,
         fully_greedy: bool = True,
     ):
-        super().__init__(discriminator, sequence, pad_size, seed)
+        super().__init__(
+            discriminator=discriminator,
+            mapping=mapping,
+            sequence=sequence,
+            pad_size=pad_size,
+            seed=seed,
+            score_config=score_config,
+        )
 
         self.multishot = multishot
         if isinstance(self.multishot, str):
@@ -211,7 +222,7 @@ class GreedyWalk(Mutator):
         proposed_amino_acid_list = []
 
         # Go through each position and ignore masked positions
-        for position, residue_vector in enumerate(self.transition_matrix):
+        for position, residue_vector in enumerate(self.transition_matrix.T):
             # Ignore masked positions
             if np.sum(residue_vector) == 0:
                 # Write original residue at ignored position
@@ -308,11 +319,16 @@ class GreedyWalk(Mutator):
 
         return False
 
-    def humanization_cycle(self, score_config: ModelLoadConfig) -> bool:
+    def humanization_cycle(
+        self,
+        score_config: ModelLoadConfig,
+        allow: Union[None, Literal["CDR", "cdr"], list[int]],
+        disallow: Union[None, list[int]],
+    ) -> bool:
         """
         ## Runs one humanization cycle
         """
-        self.set_transition_matrix()
+        self.set_transition_matrix(allow=allow, disallow=disallow)
         self.propose()
         self.set_score(score_config)
         self.set_decision()
@@ -362,6 +378,8 @@ class GreedyWalk(Mutator):
     def run_humanization(
         self,
         score_config: ModelLoadConfig,
+        allow: Union[None, Literal["CDR", "cdr"], list[int]] = None,
+        disallow: Union[None, list[int]] = None,
         max_iterations: int = 100,
     ):
         """
@@ -370,7 +388,9 @@ class GreedyWalk(Mutator):
         if self.n_rounds is not None:
             for _ in tqdm(range(self.n_rounds)):
                 # Run one cycle of humanization
-                continue_flag = self.humanization_cycle(score_config)
+                continue_flag = self.humanization_cycle(
+                    score_config, allow=allow, disallow=disallow
+                )
                 if not continue_flag:
                     break
             return {"greedy_walk": self.sequence_registry}
@@ -378,7 +398,9 @@ class GreedyWalk(Mutator):
         if self.score_threshold is not None:
             for _ in tqdm(range(max_iterations)):
                 # Run one cycle of humanization
-                continue_flag = self.humanization_cycle(score_config)
+                continue_flag = self.humanization_cycle(
+                    score_config, allow=allow, disallow=disallow
+                )
                 if not continue_flag:
                     break
                 if self.initial_score > self.score_threshold:
@@ -407,12 +429,12 @@ if __name__ == "__main__":
         130,
         21,
     )
+    # Multiprocessing is broken for this particular score as the ML model cannot be serialized
+    NCPUS = 1
 
+    # VAE Model (Used for scoring)
     vae_model = ProtVAE(
-        input_shape=(
-            130,
-            21,
-        ),
+        input_shape=INPUT_SHAPE,
         latent_dimension_size=32,
         pid_algorithm=True,
         desired_kl=0.25,
@@ -420,12 +442,13 @@ if __name__ == "__main__":
         integral_kl=0.0001,
         derivative_kl=0.0001,
     )
-
+    # Scoring Model
     discriminator_model = AbVAE(
         sequence="",
         model=vae_model,
         encoder=OneHot(),
     )
+
     # Create Config
     model_configuration = ModelLoadConfig(
         file_format="tf",
@@ -438,19 +461,43 @@ if __name__ == "__main__":
     # Load Model
     discriminator_model.load_model(model_configuration)
 
-    # Instantiate Greedy Walk
-    humanization_pipeline = GreedyWalk(
-        discriminator=discriminator_model,
-        pad_size=130,
-        sequence=TEST_SEQUENCE_MOUSE,
-        multishot=1,
-        n_rounds=10,
-        score_config=model_configuration,
-    )
+    # Program Loop Start
+    while True:
+        TEST_SEQUENCE = input(
+            "Please input the heavy variable domain of an antibody of interest: "
+        )
+        try:
+            Chain(TEST_SEQUENCE, "imgt")
+        except ChainParseError:
+            print("Input sequence needs to be a heavy variable domain of an antibody!")
+            continue
 
-    humanization_pipeline.run_humanization(score_config=model_configuration)
+        # Mapping Model
+        map_model = HumabMap(
+            sequence=TEST_SEQUENCE,
+            discriminator=discriminator_model,
+            score_config=model_configuration,
+            pad_size=130,
+            scheme="imgt",
+            n_jobs=NCPUS,
+        )
 
-    print(
-        humanization_pipeline.sequence_registry,
-        len(humanization_pipeline.sequence_registry),
-    )
+        # Instantiate Greedy Walk
+        humanization_pipeline = GreedyWalk(
+            discriminator=discriminator_model,
+            mapping=map_model,
+            pad_size=130,
+            sequence=TEST_SEQUENCE,
+            multishot=10,
+            n_rounds=1,
+            score_config=model_configuration,
+        )
+
+        humanization_pipeline.run_humanization(score_config=model_configuration)
+
+        print("De-immunized Sequence: ", humanization_pipeline.sequence_registry[-1][0])
+        start_score = humanization_pipeline.sequence_registry[0][-1]
+        end_score = humanization_pipeline.sequence_registry[-1][-1]
+        print(
+            f"Humanness increased from {round(start_score, 3)} to {round(end_score, 3)}"
+        )

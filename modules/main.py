@@ -466,8 +466,10 @@ if __name__ == "__main__":
         )
         try:
             Chain(TEST_SEQUENCE, "imgt")
-        except ChainParseError:
+        except ChainParseError as cpe:
             print("Input sequence needs to be a heavy variable domain of an antibody!")
+            print(f"An error occurred: {cpe}")
+
             continue
 
         # Mapping Model

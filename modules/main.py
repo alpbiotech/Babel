@@ -464,6 +464,7 @@ def main(TEST_SEQUENCE: str) -> dict:
     except ChainParseError as cpe:
         print("Input sequence needs to be a heavy variable domain of an antibody!")
         print(f"An error occurred: {cpe}")
+        raise cpe
 
     # Mapping Model
     map_model = HumabMap(
@@ -501,8 +502,8 @@ def main(TEST_SEQUENCE: str) -> dict:
 
     return {
         "DeImmunizedSequence": de_immunized_seq,
-        "HummannessScoreStart": start_score,
-        "HummannessScoreEnd": end_score
+        "HumannessScoreStart": start_score,
+        "HumannessScoreEnd": end_score
     }
 
 

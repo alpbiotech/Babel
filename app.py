@@ -1,3 +1,4 @@
+from abnumber import ChainParseError
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from modules.main import main
@@ -25,7 +26,12 @@ def predict():
     # Get the input data from the POST request
     data = request.json
     input_sequence = data.get('inputSequence', '')
-    predictions: dict = main(input_sequence)
+    try:
+        predictions: dict = main(input_sequence)
+    except ChainParseError as cpe:
+        predictions = {
+            "DeImmunizedSequence": str(cpe)
+        }
     return jsonify(predictions)
 
 

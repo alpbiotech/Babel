@@ -412,26 +412,30 @@ class GreedyWalk(Mutator):
             "Maximum likelihood-type mutators do not have warmups"
         )
 
+
 def main(TEST_SEQUENCE: str) -> dict:
-    WEIGHTS_PATH = Path(
+    """
+    ## Main program loop
+    """
+    weights_path = Path(
         "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
     )
-    CALIBRATION_DATA_PATH = Path("./calibration_data/VAE_test_data.csv")
-    PCA_DATA_PATH = Path("./calibration_data/pca_calibration_data")
-    NORMAL_DISTRIBUTION_DATA = Path(
+    calibration_data_path = Path("./calibration_data/VAE_test_data.csv")
+    pca_data_path = Path("./calibration_data/pca_calibration_data")
+    normal_distribution_data = Path(
         "./calibration_data/gaussian_full_representation.json"
     )
 
-    INPUT_SHAPE = (
+    input_shape = (
         130,
         21,
     )
     # Multiprocessing is broken for this particular score as the ML model cannot be serialized
-    NCPUS = 1
+    ncpus = 1
 
     # VAE Model (Used for scoring)
     vae_model = ProtVAE(
-        input_shape=INPUT_SHAPE,
+        input_shape=input_shape,
         latent_dimension_size=32,
         pid_algorithm=True,
         desired_kl=0.25,
@@ -449,10 +453,10 @@ def main(TEST_SEQUENCE: str) -> dict:
     # Create Config
     model_configuration = ModelLoadConfig(
         file_format="tf",
-        path=WEIGHTS_PATH,
-        calibration_data_path=CALIBRATION_DATA_PATH,
-        pca_data_path=PCA_DATA_PATH,
-        gaussian_data_path=NORMAL_DISTRIBUTION_DATA,
+        path=weights_path,
+        calibration_data_path=calibration_data_path,
+        pca_data_path=pca_data_path,
+        gaussian_data_path=normal_distribution_data,
     )
 
     # Load Model
@@ -473,7 +477,7 @@ def main(TEST_SEQUENCE: str) -> dict:
         score_config=model_configuration,
         pad_size=130,
         scheme="imgt",
-        n_jobs=NCPUS,
+        n_jobs=ncpus,
     )
 
     # Instantiate Greedy Walk
@@ -482,8 +486,8 @@ def main(TEST_SEQUENCE: str) -> dict:
         mapping=map_model,
         pad_size=130,
         sequence=TEST_SEQUENCE,
-        multishot=10,
-        n_rounds=1,
+        multishot=2,
+        n_rounds=5,
         score_config=model_configuration,
     )
 
@@ -496,14 +500,12 @@ def main(TEST_SEQUENCE: str) -> dict:
     end_score = round(end_score, 3)
 
     print(f"De-immunized Sequence: {de_immunized_seq}")
-    print(
-        f"Humanness increased from {start_score} to {end_score}"
-    )
+    print(f"Humanness increased from {start_score} to {end_score}")
 
     return {
         "DeImmunizedSequence": de_immunized_seq,
         "HumannessScoreStart": start_score,
-        "HumannessScoreEnd": end_score
+        "HumannessScoreEnd": end_score,
     }
 
 

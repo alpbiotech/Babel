@@ -137,6 +137,14 @@ class HumabMap(Map):
         # Iterate through all sequences to calculate score
         transition_matrix = np.zeros((20, len(self.sequence)))
         column = 0  # The column value also keeps track of the sequence indices
+        # Sampling Flag
+        sample_flag = True
+        while sample_flag:
+            # Sample until no overlap with CDR
+            sample = np.random.randint(0, len(self.sequence), size=10)
+            if not bool(set(self.cdr) & set(sample)):
+                sample_flag = False
+
         for i, seq in tqdm(
             enumerate(all_single_mutants), total=len(all_single_mutants)
         ):
@@ -144,6 +152,9 @@ class HumabMap(Map):
             # Once end of column is reached, start populating next column
             if i % 20 == 0 and i != 0:
                 column += 1
+
+            if column not in sample:
+                continue
 
             # If the index is in self.cdr, it is a disallowed residue and is set to 0
             if self.cdr is not None:
@@ -225,19 +236,20 @@ class HumabMap(Map):
         )
 
         all_vectors = np.zeros((20, len(self.sequence)))
-        with Pool(processes=self.n_jobs) as pool:
-            results = list(
-                tqdm(
-                    pool.imap(partial_single_process, indexed_split_sequence_array),
-                    total=len(indexed_split_sequence_array),
-                )
-            )
-            for index, vector in enumerate(results):
-                all_vectors[:, index] = vector
+        pool = Pool(processes=self.n_jobs)
 
-            # for index in range(len(self.sequence)):
-            #     if index in self.cdr:
-            #         all_vectors[:, index] = np.zeros(20)
+        # with Pool(processes=self.n_jobs) as pool:
+        results = list(
+            tqdm(
+                pool.imap(partial_single_process, indexed_split_sequence_array),
+                total=len(indexed_split_sequence_array),
+            )
+        )
+        for index, vector in enumerate(results):
+            all_vectors[:, index] = vector
+
+        pool.close()
+
         all_vectors = self.normalize_map(np.array(all_vectors))
         return all_vectors
 

@@ -107,6 +107,7 @@ class AbVAE(Discriminator):
         """
         ## Calculates the Mahalanobis Probability of a Sequence
         """
+
         assert self.gaussian_parameter_dict, "Load models first!"
         assert self.pca_model, "Load models first!"
 

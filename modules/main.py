@@ -486,7 +486,7 @@ def main(TEST_SEQUENCE: str) -> dict:
         mapping=map_model,
         pad_size=130,
         sequence=TEST_SEQUENCE,
-        multishot=2,
+        multishot=1,
         n_rounds=5,
         score_config=model_configuration,
     )

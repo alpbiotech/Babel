@@ -18,6 +18,7 @@ from tqdm import tqdm
 
 import numpy as np
 import numpy.typing as npt
+import tensorflow as tf
 
 from abnumber import Chain, ChainParseError
 from modules.mutator_abc import Mutator
@@ -417,6 +418,12 @@ def main(TEST_SEQUENCE: str) -> dict:
     """
     ## Main program loop
     """
+    # Tensorflow Config
+    tensorflow_config = tf.config.experimental.list_physical_devices(device_type="CPU")
+    tf.config.experimental.set_visible_devices(
+        devices=tensorflow_config, device_type="CPU"
+    )
+
     weights_path = Path(
         "./model_weights/VAE_1MM_dkl_025_300epochs_LD_32_derivative/VAE_1MM_dkl_025_300epochs_LD_32_derivative.tf"  # pylint: disable=line-too-long
     )

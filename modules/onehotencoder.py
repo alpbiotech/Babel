@@ -1,11 +1,11 @@
-""" 
-    ------------------- Encoder for Mousify --------------------------
-    Takes a sequence or an array of sequences and encodes them
-    --------------------- One Hot Encoding ---------------------------
-    Simple encoding that converts each amino acid into a size 20 array.
-    Array will be 1 at positions that correspond to the amino acid and 
-    0 at all other positions. Encoding can either be stored as a 20xN
-    matrix or a 20N vector.
+"""
+------------------- Encoder for Mousify --------------------------
+Takes a sequence or an array of sequences and encodes them
+--------------------- One Hot Encoding ---------------------------
+Simple encoding that converts each amino acid into a size 20 array.
+Array will be 1 at positions that correspond to the amino acid and
+0 at all other positions. Encoding can either be stored as a 20xN
+matrix or a 20N vector.
 """
 
 import re
@@ -21,7 +21,7 @@ from abnumber import Chain
 from abnumber.exceptions import ChainParseError
 from tqdm import tqdm
 
-from modules.encoder import Encoder
+from Babel.modules.encoder import Encoder
 
 
 class OneHot(Encoder):

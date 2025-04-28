@@ -1,9 +1,9 @@
-""" 
-    -------------------- Protein VAE for Mousify ---------------------------
-    Defines and trains the Protein VAE for Mousify. This model structure is
-    inspired by the paper ProteinVAE:
-    https://www.biorxiv.org/content/10.1101/2023.03.04.531110v1.full
-    ------------------------------------------------------------------------
+"""
+-------------------- Protein VAE for Babel ---------------------------
+Defines and trains the Protein VAE for Babel. This model structure is
+inspired by the paper ProteinVAE:
+https://www.biorxiv.org/content/10.1101/2023.03.04.531110v1.full
+------------------------------------------------------------------------
 """
 
 from typing import Optional
@@ -94,7 +94,8 @@ class ProtVAE(keras.Model):
                 and proportional_kl
                 and integral_kl
                 and derivative_kl is not None
-            ), "desired_kl, proportional_kl, integral_kl and derivative_kl cannot be None if PID is enabled!"
+            ), "desired_kl, proportional_kl, integral_kl and derivative_kl cannot \
+            be None if PID is enabled!"
             # Set PID flag
             self.pid = True
             # Initialize KL scores
@@ -401,17 +402,21 @@ class ProtVAE(keras.Model):
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         # Update losses
-        self.total_loss_tracker.update_state(total_loss)  # disable: non-callable
-        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
-        self.kl_loss_tracker.update_state(kl_loss)
-        self.kl_beta_tracker.update_state(control_score * kl_loss)
+        self.total_loss_tracker.update_state(total_loss)  # pylint: disable=not-callable
+        self.reconstruction_loss_tracker.update_state(  # pylint: disable=not-callable
+            reconstruction_loss  # pylint: disable=not-callable
+        )  # pylint: disable=not-callable
+        self.kl_loss_tracker.update_state(kl_loss)  # pylint: disable=not-callable
+        self.kl_beta_tracker.update_state(  # pylint: disable=not-callable
+            control_score * kl_loss  # pylint: disable=not-callable
+        )  # pylint: disable=not-callable
 
         # Return dictionary of losses
         return {
-            "total_loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-            "kl_loss": self.kl_loss_tracker.result(),
-            "beta_score": self.kl_beta_tracker.result(),
+            "total_loss": self.total_loss_tracker.result(),  # pylint: disable=not-callable
+            "reconstruction_loss": self.reconstruction_loss_tracker.result(),  # pylint: disable=not-callable
+            "kl_loss": self.kl_loss_tracker.result(),  # pylint: disable=not-callable
+            "beta_score": self.kl_beta_tracker.result(),  # pylint: disable=not-callable
         }
 
     def test_step(self, data: npt.ArrayLike):
@@ -437,13 +442,15 @@ class ProtVAE(keras.Model):
         kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
         # Calculate total loss
         total_loss = reconstruction_loss + kl_loss
-        self.total_loss_tracker.update_state(total_loss)
-        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
-        self.kl_loss_tracker.update_state(kl_loss)
+        self.total_loss_tracker.update_state(total_loss)  # pylint: disable=not-callable
+        self.reconstruction_loss_tracker.update_state(  # pylint: disable=not-callable
+            reconstruction_loss  # pylint: disable=not-callable
+        )  # pylint: disable=not-callable
+        self.kl_loss_tracker.update_state(kl_loss)  # pylint: disable=not-callable
         return {
-            "total_loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-            "kl_loss": self.kl_loss_tracker.result(),
+            "total_loss": self.total_loss_tracker.result(),  # pylint: disable=not-callable
+            "reconstruction_loss": self.reconstruction_loss_tracker.result(),  # pylint: disable=not-callable
+            "kl_loss": self.kl_loss_tracker.result(),  # pylint: disable=not-callable
         }
 
 

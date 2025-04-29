@@ -29,7 +29,7 @@ class ADAModel(tf.keras.Model):
 
         # Freeze encoder layers
         for layer in self.vae_model.encoder.layers:
-            layer.trainable = False
+            layer.trainable = True
 
         # Keep decoder unfrozen
         for layer in self.vae_model.decoder.layers:

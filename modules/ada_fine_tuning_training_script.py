@@ -28,15 +28,20 @@ if __name__ == "__main__":
     )
     HUBER_DELTA = 1.0
     K_FOLDS = 5
-    REPEATS = 100
+    REPEATS = 10
     BATCH_SIZE = 1
-    EPOCHS = 50
-    REGRESSION_WEIGHT = 1.0
+    EPOCHS = 20
+    REGRESSION_WEIGHT = 4.0
     RECONSTRUCTION_WEIGHT = 1.0
-    LEARNING_RATE = 1e-2
+    LEARNING_RATE = 1e-3
 
     learning_rate_scheduler = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="val_loss", factor=0.5, patience=2, min_lr=1e-7, verbose=1
+        monitor="val_loss",
+        factor=0.5,
+        patience=2,
+        min_lr=1e-7,
+        verbose=1,
+        min_delta=0.01,
     )
 
     # Training Data
@@ -150,8 +155,8 @@ if __name__ == "__main__":
     )
     final_model.set_weights(averaged_weights)
 
-    final_model.model.save(
-        "/home/lschaus/vscode/ada_training/20250428_ADAModel_Average_Repeat_100.keras"
+    final_model.save_weights(
+        "/home/lschaus/vscode/ada_training/20250428_ADAModel_Average_Repeat_100.ckpt"
     )
     np.save(
         "/home/lschaus/vscode/ada_training/20250428_Test_Set_Sequences.npy",

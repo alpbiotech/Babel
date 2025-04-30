@@ -11,19 +11,23 @@ from pathlib import Path
 
 import joblib
 
-import numpy as np
 import pandas as pd
+import numpy as np
 import numpy.typing as npt
 import xgboost as xgb
 
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
+from sklearn.metrics import mean_absolute_error, r2_score, make_scorer
 
 from Babel.modules.bytenet_vae_295k import ProtVAE
 from Babel.modules.onehotencoder import OneHot
 
 
 class LatentRegressor:
+    """
+    # Latent Regressor for ProtVAE model based on XGBoost
+    """
+
     def __init__(
         self,
         vae_model: ProtVAE,
@@ -76,10 +80,12 @@ class LatentRegressor:
         model = xgb.XGBRegressor(
             n_estimators=100,
             learning_rate=0.1,
-            max_depth=3,
-            subsample=0.8,
+            max_depth=2,
+            subsample=1.0,
             colsample_bytree=0.8,
             random_state=self.random_state,
+            reg_lambda=5,
+            reg_alpha=0.005,
         )
 
         model.fit(latent_training, label_training)
@@ -95,7 +101,7 @@ class LatentRegressor:
             self.model_history.update(metrics_dict)
 
         if self.verbose:
-            print("\n", "Fit complete...", "\n")
+            print("Fit complete...", "\n")
             print(
                 f"Train MAE: {metrics_dict['mae']['train']}",
                 f"Test MAE: {metrics_dict['mae']['test']}",
@@ -109,6 +115,28 @@ class LatentRegressor:
 
         return model, metrics_dict
 
+    def grid_search_optimization(
+        self,
+        training_data: npt.NDArray,
+        training_labels: npt.NDArray,
+        parameter_grid: dict[str, list],
+    ) -> dict:
+        """
+        ## Performs Grid Search Hyperparameter Optimization
+        """
+        latent_mean, _, __ = self.encode(training_data)
+        model = xgb.XGBRegressor()
+        scoring_function = make_scorer(mean_absolute_error, greater_is_better=False)
+        grid_search = GridSearchCV(
+            estimator=model,
+            param_grid=parameter_grid,
+            scoring=scoring_function,
+            verbose=1,
+            n_jobs=4,
+        )
+        grid_search.fit(latent_mean, training_labels)
+        return {"parameters": grid_search.best_params_, "loss": grid_search.best_score_}
+
     def metrics(
         self,
         latent_training: npt.NDArray,
@@ -119,8 +147,8 @@ class LatentRegressor:
         """
         ## Calculate model metrics
         """
-        test_prediction = self.model.predict(latent_test)
-        train_prediction = self.model.predict(latent_training)
+        test_prediction = np.clip(self.model.predict(latent_test), 0, 1)
+        train_prediction = np.clip(self.model.predict(latent_training), 0, 1)
 
         train_loss = mean_absolute_error(label_training, train_prediction)
         test_loss = mean_absolute_error(label_test, test_prediction)
@@ -141,7 +169,7 @@ class LatentRegressor:
             raise ValueError("Model has not been trained or loaded...")
 
         latent_vector, _, __ = self.encoder_model.encoder.predict(data)
-        return self.model.predict(latent_vector)
+        return np.clip(self.model.predict(latent_vector), 0, 1)
 
     def score(
         self,
@@ -256,7 +284,24 @@ if __name__ == "__main__":
     encoder = OneHot(sequence=heavy_sequences)
     encoded_data = encoder.encode(pad_size=130)
 
-    ada_regression_model = LatentRegressor(vae_model=protvae_model, random_state=4893)
+    # param_grid = {
+    #     "max_depth": [2],  # shallow trees to reduce overfitting
+    #     "learning_rate": [0.09, 0.1, 0.11],  # small steps for stability
+    #     "n_estimators": [100],  # compensate low LR with more trees
+    #     "subsample": [0.95, 0.975, 1.0],  # prevent overfitting by sampling rows
+    #     "colsample_bytree": [0.75, 0.8, 0.85],  # sample features per tree
+    #     "reg_alpha": [0.003, 0.005, 0.007],  # L1 regularization
+    #     "reg_lambda": [4, 5, 6],  # L2 regularization
+    # }
+
+    ada_regression_model = LatentRegressor(vae_model=protvae_model, random_state=None)
+    # print(
+    #     ada_regression_model.grid_search_optimization(
+    #         training_data=encoded_data,
+    #         training_labels=ada_scores,
+    #         parameter_grid=param_grid,
+    #     )
+    # )
     ada_regression_model.fit(training_data=encoded_data, training_labels=ada_scores)
     ada_regression_model.save_model(MODEL_SAVE_PATH)
 

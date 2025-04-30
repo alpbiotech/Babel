@@ -29,11 +29,11 @@ class ADAModel(tf.keras.Model):
 
         # Freeze encoder layers
         for layer in self.vae_model.encoder.layers:
-            layer.trainable = True
+            layer.trainable = False
 
         # Keep decoder unfrozen
         for layer in self.vae_model.decoder.layers:
-            layer.trainable = True
+            layer.trainable = False
 
         self.regression_model = self.feed_forward_regression_model()
 
@@ -63,41 +63,41 @@ class ADAModel(tf.keras.Model):
                 INPUT_DIMENSION,
             )
         )
-        input_layer = layers.Reshape((INPUT_DIMENSION, 1))(input_layer)
+        # input_layer = layers.Reshape((INPUT_DIMENSION, 1))(input_layer)
 
-        # ByteNet Block 1
-        bytenet_layer = layers.LayerNormalization()(input_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER * 2,
-            kernel_size=1,
-            strides=1,
-            padding="same",
-        )(bytenet_layer)
-        bytenet_layer = layers.LayerNormalization()(bytenet_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER * 2,
-            kernel_size=5,
-            padding="same",
-            dilation_rate=3,
-        )(bytenet_layer)
-        bytenet_layer = layers.LayerNormalization()(bytenet_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER,
-            kernel_size=1,
-            strides=1,
-            padding="same",
-        )(bytenet_layer)
-        forward_layer = layers.Add()([input_layer, bytenet_layer])
+        # # ByteNet Block 1
+        # bytenet_layer = layers.LayerNormalization()(input_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER * 2,
+        #     kernel_size=1,
+        #     strides=1,
+        #     padding="same",
+        # )(bytenet_layer)
+        # bytenet_layer = layers.LayerNormalization()(bytenet_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER * 2,
+        #     kernel_size=5,
+        #     padding="same",
+        #     dilation_rate=3,
+        # )(bytenet_layer)
+        # bytenet_layer = layers.LayerNormalization()(bytenet_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER,
+        #     kernel_size=1,
+        #     strides=1,
+        #     padding="same",
+        # )(bytenet_layer)
+        # forward_layer = layers.Add()([input_layer, bytenet_layer])
 
         # Dense
         forward_layer = layers.Dense(
             INPUT_DIMENSION,
             activation="relu",
             kernel_regularizer=tf.keras.regularizers.l2(1e-4),
-        )(forward_layer)
+        )(input_layer)
         forward_layer = layers.Dropout(0.25)(forward_layer)
         forward_layer = layers.Dense(
             INPUT_DIMENSION // 2,
@@ -106,43 +106,43 @@ class ADAModel(tf.keras.Model):
         )(forward_layer)
         forward_layer = layers.Dropout(0.25)(forward_layer)
 
-        # ByteNet Block 2
-        bytenet_layer = layers.LayerNormalization()(forward_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER,
-            kernel_size=1,
-            strides=1,
-            padding="same",
-        )(bytenet_layer)
-        bytenet_layer = layers.LayerNormalization()(bytenet_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER,
-            kernel_size=5,
-            padding="same",
-            dilation_rate=3,
-        )(bytenet_layer)
-        bytenet_layer = layers.LayerNormalization()(bytenet_layer)
-        bytenet_layer = layers.Activation("gelu")(bytenet_layer)
-        bytenet_layer = layers.Conv1D(
-            filters=FILTER_NUMBER / 2,
-            kernel_size=1,
-            strides=1,
-            padding="same",
-        )(bytenet_layer)
-        forward_layer = layers.Add()([forward_layer, bytenet_layer])
-        forward_layer = layers.GlobalAveragePooling1D()(forward_layer)
+        # # ByteNet Block 2
+        # bytenet_layer = layers.LayerNormalization()(forward_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER,
+        #     kernel_size=1,
+        #     strides=1,
+        #     padding="same",
+        # )(bytenet_layer)
+        # bytenet_layer = layers.LayerNormalization()(bytenet_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER,
+        #     kernel_size=5,
+        #     padding="same",
+        #     dilation_rate=3,
+        # )(bytenet_layer)
+        # bytenet_layer = layers.LayerNormalization()(bytenet_layer)
+        # bytenet_layer = layers.Activation("gelu")(bytenet_layer)
+        # bytenet_layer = layers.Conv1D(
+        #     filters=FILTER_NUMBER / 2,
+        #     kernel_size=1,
+        #     strides=1,
+        #     padding="same",
+        # )(bytenet_layer)
+        # forward_layer = layers.Add()([forward_layer, bytenet_layer])
+        # forward_layer = layers.GlobalAveragePooling1D()(forward_layer)
 
         # Dense
+        # forward_layer = layers.Dense(
+        #     INPUT_DIMENSION // 4,
+        #     activation="relu",
+        #     kernel_regularizer=tf.keras.regularizers.l2(1e-4),
+        # )(forward_layer)
+        # forward_layer = layers.Dropout(0.5)(forward_layer)
         forward_layer = layers.Dense(
-            INPUT_DIMENSION // 2,
-            activation="relu",
-            kernel_regularizer=tf.keras.regularizers.l2(1e-4),
-        )(forward_layer)
-        forward_layer = layers.Dropout(0.25)(forward_layer)
-        forward_layer = layers.Dense(
-            INPUT_DIMENSION // 4,
+            INPUT_DIMENSION // 8,
             activation="relu",
             kernel_regularizer=tf.keras.regularizers.l2(1e-4),
         )(forward_layer)

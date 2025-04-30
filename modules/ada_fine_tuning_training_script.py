@@ -26,14 +26,14 @@ if __name__ == "__main__":
         130,
         21,
     )
-    HUBER_DELTA = 1.0
+    HUBER_DELTA = 0.5
     K_FOLDS = 5
-    REPEATS = 10
+    REPEATS = 2
     BATCH_SIZE = 1
-    EPOCHS = 20
-    REGRESSION_WEIGHT = 4.0
-    RECONSTRUCTION_WEIGHT = 1.0
-    LEARNING_RATE = 1e-3
+    EPOCHS = 50
+    REGRESSION_WEIGHT = 1.0
+    RECONSTRUCTION_WEIGHT = 0
+    LEARNING_RATE = 1e-4
 
     learning_rate_scheduler = tf.keras.callbacks.ReduceLROnPlateau(
         monitor="val_loss",
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # Hold out test set
     heavy_sequences_train, heavy_sequences_test, ada_scores_train, ada_scores_test = (
         train_test_split(
-            heavy_sequences, ada_scores, test_size=0.2, random_state=4893, shuffle=True
+            heavy_sequences, ada_scores, test_size=0.1, random_state=4893, shuffle=True
         )
     )
     # Encode Data
@@ -101,14 +101,16 @@ if __name__ == "__main__":
         model.compile(
             optimizer="adam",
             loss={
-                "decoder_output": "categorical_crossentropy",
+                # "decoder_output": "categorical_crossentropy",
                 "regression_output": tf.keras.losses.Huber(delta=HUBER_DELTA),
             },
             loss_weights={
-                "decoder_output": RECONSTRUCTION_WEIGHT,
+                # "decoder_output": RECONSTRUCTION_WEIGHT,
                 "regression_output": REGRESSION_WEIGHT,
             },
-            metrics={"decoder_output": "accuracy", "regression_output": "mae"},
+            metrics={
+                "regression_output": "mae"
+            },  # "decoder_output": "accuracy", "regression_output": "mae"},
         )
 
         # Train
@@ -139,30 +141,50 @@ if __name__ == "__main__":
         mean_weight = np.mean(weights_stack, axis=0)
         averaged_weights.append(mean_weight)
 
+    # Best model
+    best_val_loss = [
+        min(any_model.history["val_regression_output_loss"]) for any_model in all_models
+    ]
+    best_index = np.argmin(best_val_loss)
+    best_model: ADAModel = all_models[best_index].model
+    best_model.save_weights(
+        "/home/lschaus/vscode/ada_training/20250429_ADAModel_small_Best_10_2.ckpt"
+    )
+
     # Create final model
     final_model = ADAModel(vae_model=protvae_model)
     final_model.compile(
         optimizer="adam",
         loss={
-            "decoder_output": "categorical_crossentropy",
+            # "decoder_output": "categorical_crossentropy",
             "regression_output": tf.keras.losses.Huber(delta=HUBER_DELTA),
         },
         loss_weights={
-            "decoder_output": RECONSTRUCTION_WEIGHT,
+            # "decoder_output": RECONSTRUCTION_WEIGHT,
             "regression_output": REGRESSION_WEIGHT,
         },
-        metrics={"decoder_output": "accuracy", "regression_output": "mae"},
+        metrics={
+            "regression_output": "mae"
+        },  # "decoder_output": "accuracy", "regression_output": "mae"},
     )
     final_model.set_weights(averaged_weights)
 
     final_model.save_weights(
-        "/home/lschaus/vscode/ada_training/20250428_ADAModel_Average_Repeat_100.ckpt"
+        "/home/lschaus/vscode/ada_training/20250429_ADAModel_small_Average_Repeat_10.ckpt"
     )
     np.save(
-        "/home/lschaus/vscode/ada_training/20250428_Test_Set_Sequences.npy",
+        "/home/lschaus/vscode/ada_training/20250429_Test_Set_Sequences.npy",
         heavy_sequences_test,
     )
     np.save(
-        "/home/lschaus/vscode/ada_training/20250428_Test_Set_ADA_Scores.npy",
+        "/home/lschaus/vscode/ada_training/20250429_Test_Set_ADA_Scores.npy",
         ada_scores_test,
+    )
+    np.save(
+        "/home/lschaus/vscode/ada_training/20250429_Training_Set_Sequences.npy",
+        heavy_sequences_train,
+    )
+    np.save(
+        "/home/lschaus/vscode/ada_training/20250429_Training_Set_ADA_Scores.npy",
+        ada_scores_train,
     )
